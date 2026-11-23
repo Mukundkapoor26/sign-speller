@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sign Speller: real-time ASL fingerspelling to text in your browser</title>
+<meta name="description" content="Spell words with your hand on a webcam and see them as text in real time. Free, open-source ASL alphabet (fingerspelling) translator with a letter guide, practice mode, keyboard-to-sign view and text to speech. Runs in your browser, no video leaves your device." />
+<meta name="keywords" content="sign language translator, ASL fingerspelling, ASL alphabet, sign language to text, real-time sign language, learn ASL alphabet, webcam, hand tracking, MediaPipe, accessibility" />
+<meta name="author" content="Mukund Kapoor" />
+<meta name="theme-color" content="#000000" />
+<link rel="canonical" href="https://mukundkapoor26.github.io/sign-speller/" />
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Sign Speller: real-time ASL fingerspelling to text" />
+<meta property="og:description" content="Fingerspell with your webcam and it types, shows the signs and speaks for you. Free and open source, runs in your browser." />
+<meta property="og:url" content="https://mukundkapoor26.github.io/sign-speller/" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="Sign Speller: real-time ASL fingerspelling to text" />
+<meta name="twitter:description" content="Fingerspell with your webcam and it types, shows the signs and speaks for you. Free and open source." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' fill='%23fff' text-anchor='middle'%3Es/s%3C/text%3E%3C/svg%3E" />
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"Sign Speller","alternateName":"sign/speller","url":"https://mukundkapoor26.github.io/sign-speller/",
+ "description":"Real-time ASL fingerspelling to text with a webcam: a letter guide, practice mode, keyboard-to-sign view and text to speech. Runs in the browser.",
+ "applicationCategory":"AccessibilityApplication","operatingSystem":"Any (modern web browser)","isAccessibleForFree":true,"license":"https://opensource.org/licenses/MIT",
+ "offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Mukund Kapoor","url":"https://mukundkapoor.com/"},
+ "codeRepository":"https://github.com/Mukundkapoor26/sign-speller"}
+</script>
+<style>
+  :root { --w:#fff; --mid:rgba(255,255,255,.55); --low:rgba(255,255,255,.14); --card:#0b0b0b; --pad:max(16px, env(safe-area-inset-left)); --rp:0px; --dockH:150px; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { margin:0; height:100%; background:#000; color:var(--w); overflow:hidden; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:13px; letter-spacing:.01em; }
+  video { display:none; }
+  #cv { position:fixed; inset:0; width:100vw; height:100vh; }
+
+  .top { position:fixed; top:max(16px, env(safe-area-inset-top)); left:var(--pad); right:calc(var(--pad) + var(--rp)); display:flex; justify-content:space-between; align-items:center; gap:12px; pointer-events:none; text-shadow:0 1px 8px rgba(0,0,0,.6); z-index:3; }
+  .brand span, #note { color:var(--mid); }
+  #note { font-size:11px; text-align:right; }
+
+  /* the sentence: the one thing that must always be readable */
+  .say { position:fixed; top:calc(max(16px, env(safe-area-inset-top)) + 30px); left:calc(var(--pad)); right:calc(var(--pad) + var(--rp)); display:flex; flex-direction:column; align-items:center; gap:8px; z-index:2; pointer-events:none; }
+  .say > * { pointer-events:auto; }
+  #text { width:min(760px, 100%); min-height:2.4em; max-height:30vh; resize:none; overflow-y:auto; background:rgba(0,0,0,.45); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+          border:1px solid var(--low); border-radius:18px; color:var(--w); font:inherit; font-size:clamp(22px, 3.6vw, 38px); line-height:1.25; padding:12px 16px; outline:none; caret-color:var(--w); }
+  #text::placeholder { color:rgba(255,255,255,.35); }
+  #text:focus { border-color:var(--mid); }
+  #sugs { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; min-height:34px; }
+  #sugs button { color:var(--mid); background:rgba(0,0,0,.45); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+  #sugs button b { font-weight:normal; color:var(--w); }
+
+  .dock { position:fixed; left:calc((100% - var(--rp)) / 2); transform:translateX(-50%); bottom:max(16px, env(safe-area-inset-bottom)); width:min(620px, calc(100% - 32px - var(--rp)));
+          background:rgba(0,0,0,.5); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid var(--low); border-radius:18px; padding:12px; display:grid; gap:10px; z-index:3; }
+  .dock > * { min-width:0; }
+  .row { display:flex; align-items:center; gap:8px; }
+  .spacer { flex:1; }
+  button { font:inherit; color:var(--w); background:transparent; border:1px solid var(--low); border-radius:999px; min-height:34px; padding:0 12px; cursor:pointer; white-space:nowrap; }
+  button:active { transform:scale(.96); }
+  button.on { background:var(--w); color:#000; border-color:var(--w); }
+  .ghost { color:var(--mid); }
+  .seg { display:flex; border:1px solid var(--low); border-radius:999px; padding:2px; }
+  .seg button { border:0; min-height:26px; padding:0 10px; color:var(--mid); }
+  .seg button.on { background:var(--w); color:#000; }
+  .live { display:flex; align-items:center; gap:10px; flex:1; min-width:0; }
+  #ring { width:46px; height:46px; flex:none; }
+  #ring text { font:20px ui-monospace, Menlo, monospace; fill:#fff; }
+  .meter { flex:1; min-width:0; display:grid; grid-template-columns:minmax(0,1fr); gap:5px; }
+  .meter .lab { display:flex; justify-content:space-between; color:var(--mid); font-size:11px; gap:8px; }
+  .meter .lab span:first-child { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  .meter .lab span:last-child { flex:none; }
+  .bar { height:3px; background:var(--low); border-radius:2px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--w); transition:width .12s linear; }
+  .acts { display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; }
+  .acts::-webkit-scrollbar { display:none; }
+  .acts button { flex:none; }
+  #camSel { flex:none; appearance:none; -webkit-appearance:none; font:inherit; color:var(--w); background:transparent; border:1px solid var(--low); border-radius:999px; min-height:34px; padding:0 26px 0 12px; max-width:190px; text-overflow:ellipsis; cursor:pointer; outline:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--mid) 50%),linear-gradient(135deg,var(--mid) 50%,transparent 50%); background-position:calc(100% - 14px) 50%,calc(100% - 9px) 50%; background-size:5px 5px; background-repeat:no-repeat; display:none; }
+  #camSel option { background:#000; color:#fff; }
+  #camSel:focus { border-color:var(--mid); }
+  .hint { color:var(--mid); font-size:11px; text-align:center; line-height:1.6; }
+
+  /* letter guide */
+  .guide { position:fixed; top:max(16px, env(safe-area-inset-top)); right:var(--pad); bottom:max(16px, env(safe-area-inset-bottom)); width:300px; z-index:4;
+           background:rgba(0,0,0,.55); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border:1px solid var(--low); border-radius:18px; display:none; flex-direction:column; overflow:hidden; }
+  body.guide-open .guide { display:flex; }
+  .ghead { display:flex; align-items:center; gap:6px; padding:10px 10px 0 12px; }
+  .ghead .seg button { padding:0 8px; }
+  .gscroll { overflow-y:auto; padding:10px 12px 14px; display:grid; gap:12px; scrollbar-width:thin; }
+  .focus { flex:none; margin:10px 12px 0; display:grid; grid-template-columns:120px minmax(0,1fr); gap:12px; align-items:center; border:1px solid var(--low); border-radius:14px; padding:10px; background:var(--card); }
+  .focus svg { width:120px; height:120px; }
+  .focus .big { font-size:34px; line-height:1; }
+  .focus .cap { color:var(--mid); line-height:1.5; margin:6px 0 8px; font-size:12px; overflow-wrap:anywhere; }
+  .focus .row { flex-wrap:wrap; gap:6px; }
+  .focus .row button { min-height:28px; padding:0 10px; font-size:12px; }
+  .focus .full { grid-column:1 / -1; display:grid; gap:8px; border-top:1px solid var(--low); padding-top:10px; }
+  #lstat { color:var(--mid); font-size:12px; min-height:1.5em; }
+  #lstat.ok { color:var(--w); }
+  .wordin { display:flex; gap:6px; }
+  .wordin input { flex:1; min-width:0; font:inherit; font-size:13px; color:var(--w); background:transparent; border:1px solid var(--low); border-radius:999px; padding:0 12px; min-height:30px; outline:none; }
+  .wordin input:focus { border-color:var(--mid); }
+  .wordin button { min-height:30px; font-size:12px; }
+  #lword { display:flex; flex-wrap:wrap; gap:4px; font-size:22px; letter-spacing:.02em; }
+  #lword span { color:rgba(255,255,255,.3); padding:0 2px; border-bottom:2px solid transparent; }
+  #lword span.done { color:var(--w); }
+  #lword span.now { color:var(--w); border-bottom-color:var(--w); }
+  .grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:6px; }
+  .card { position:relative; border:1px solid var(--low); border-radius:12px; background:var(--card); padding:4px 4px 2px; cursor:pointer; color:var(--mid); display:grid; justify-items:center; min-height:0; font:inherit; }
+  .card svg, .card img { width:100%; aspect-ratio:1; height:auto; display:block; }
+  .ref { object-fit:contain; filter:invert(1); opacity:.92; padding:6%; }
+  .ref.flip { transform:scaleX(-1); }
+  .ref + svg { display:none; }
+  .ref.bad { display:none; } .ref.bad + svg { display:block; }
+  .focus img { width:120px; height:120px; }
+  .card span { font-size:12px; padding-bottom:2px; }
+  .card.mine::after { content:''; position:absolute; top:6px; right:6px; width:4px; height:4px; border-radius:50%; background:var(--mid); }
+  .card.hot { border-color:var(--w); color:var(--w); }
+  .card:hover { border-color:var(--mid); }
+  svg .o { stroke:currentColor; fill:currentColor; }
+  svg .i { stroke:var(--card); fill:var(--card); }
+  svg .x { stroke:currentColor; fill:none; }
+  .gest { display:grid; gap:4px; color:var(--mid); font-size:12px; line-height:1.5; }
+  .gest b { color:var(--w); font-weight:normal; }
+  .sect { color:var(--mid); font-size:11px; text-transform:lowercase; }
+  .honest { color:var(--mid); font-size:11px; line-height:1.6; border-top:1px solid var(--low); padding-top:10px; }
+
+  /* show signs: what you typed, as hand pictures a viewer can read (shown the way they'd see a signer) */
+  #signs { position:fixed; left:calc((100% - var(--rp)) / 2); transform:translateX(-50%); bottom:calc(max(16px, env(safe-area-inset-bottom)) + var(--dockH) + 14px);
+           width:min(820px, calc(100% - 32px - var(--rp))); display:none; flex-direction:column; align-items:center; gap:10px; z-index:2; }
+  body.signs-on #signs { display:flex; }
+  #signRow { display:flex; flex-wrap:wrap; justify-content:center; gap:6px 4px; max-height:42vh; overflow:hidden; }
+  .sw { display:flex; gap:4px; padding:0 8px; }
+  .sg { width:clamp(46px, 7vw, 86px); background:rgba(0,0,0,.55); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); border:1px solid var(--low); border-radius:12px; display:grid; justify-items:center; color:var(--mid); font-size:12px; padding:3px 3px 2px; }
+  .sg img { width:100%; aspect-ratio:1; }
+  .sg.last { border-color:var(--w); color:var(--w); }
+  .sg .ref + svg, .big1 .ref + svg { display:none; }
+  #signBar { display:flex; gap:6px; }
+  #signBar button { background:rgba(0,0,0,.5); }
+  #player { position:fixed; inset:0; z-index:6; display:none; align-items:center; justify-content:center; flex-direction:column; gap:18px; background:rgba(0,0,0,.86); }
+  #player.on { display:flex; }
+  .big1 { width:min(56vh, 76vw); aspect-ratio:1; border:1px solid var(--low); border-radius:24px; background:var(--card); display:grid; place-items:center; }
+  .big1 img { width:86%; height:86%; }
+  #pword { font-size:clamp(22px, 4vw, 40px); display:flex; flex-wrap:wrap; justify-content:center; gap:2px; max-width:90vw; }
+  #pword span { color:rgba(255,255,255,.28); border-bottom:2px solid transparent; padding:0 1px; }
+  #pword span.done { color:var(--w); } #pword span.now { color:var(--w); border-bottom-color:var(--w); }
+  #player .row button { background:transparent; }
+  #banner { position:fixed; left:50%; transform:translateX(-50%); top:45%; z-index:2; color:var(--mid); text-align:center; line-height:1.7; max-width:min(420px, calc(100% - 32px)); display:none; }
+  body.nocam #banner { display:block; }
+  body.nocam.guide-open #banner { left:calc((100% - var(--rp)) / 2); }
+
+  body.clean .dock, body.clean .top, body.clean .guide, body.clean #sugs, body.clean #banner, body.clean #signBar { display:none !important; }
+  body.signs-on #banner { display:none; }
+  body.clean { --rp:0px !important; }
+
+  @media (max-width: 899px) {
+    :root { --rp:0px !important; }
+    .guide { top:auto; left:var(--pad); right:var(--pad); width:auto; bottom:calc(max(16px, env(safe-area-inset-bottom)) + var(--dockH) + 10px); max-height:min(56vh, 520px); }
+    .grid { grid-template-columns:repeat(6, 1fr); }
+  }
+  @media (max-width: 480px) {
+    .hint { display:none; } .dock { padding:10px; } .grid { grid-template-columns:repeat(5, 1fr); }
+    .dock > .row:first-child { flex-wrap:wrap; row-gap:8px; } .dock > .row:first-child .live { flex:1 1 100%; }
+    .dock > .row:first-child button { flex:1; padding:0 8px; }
+    .focus { grid-template-columns:92px minmax(0,1fr); } .focus svg, .focus img { width:92px; height:92px; }
+    #text { padding:10px 12px; border-radius:14px; }
+  }
+
+  #start { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; padding:24px; text-align:center; background:#000; overflow-y:auto; }
+  #start pre { margin:0; color:var(--mid); font-size:12px; line-height:1.2; }
+  #start h1 { margin:0; font-weight:normal; font-size:26px; letter-spacing:.02em; }
+  #start h1 span { color:var(--mid); }
+  #start p { margin:0; color:var(--mid); max-width:380px; line-height:1.6; }
+  #start .btns { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+  #go { background:var(--w); color:#000; border:0; min-height:44px; padding:0 26px; font-size:14px; }
+  #kb { min-height:44px; padding:0 20px; }
+  #status { font-size:11px; }
+</style>
+</head>
+<body class="guide-open">
+<video id="cam" playsinline muted></video>
+<canvas id="cv"></canvas>
+
+<div class="top"><div class="brand">sign<span>/</span>speller</div><div id="note">fingerspelling · asl alphabet</div></div>
+
+<div class="say">
+  <textarea id="text" rows="1" spellcheck="false" autocomplete="off" autocapitalize="sentences" placeholder="start spelling…" aria-label="your sentence"></textarea>
+  <div id="sugs" aria-label="word suggestions"></div>
+</div>
+
+<div id="banner"></div>
+
+<div id="signs" aria-live="polite">
+  <div id="signRow"></div>
+  <div id="signBar"><button id="playBtn" title="fingerspell your last sentence, one big letter at a time (p)">▶ play sentence</button></div>
+</div>
+<div id="player" role="dialog" aria-label="fingerspelling playback">
+  <div class="big1" id="pbig"></div>
+  <div id="pword"></div>
+  <div class="row"><button id="pAgain">↻ again</button><button id="pSlow" class="ghost">slower</button><button id="pClose">close</button></div>
+</div>
+
+<div class="dock" id="dock">
+  <div class="row">
+    <div class="live">
+      <svg id="ring" viewBox="0 0 46 46" aria-hidden="true">
+        <circle cx="23" cy="23" r="20" fill="none" stroke="rgba(255,255,255,.14)" stroke-width="2"/>
+        <circle id="ringArc" cx="23" cy="23" r="20" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-dasharray="0 126" transform="rotate(-90 23 23)"/>
+        <text id="ringTxt" x="23" y="30" text-anchor="middle">·</text>
+      </svg>
+      <div class="meter">
+        <div class="lab"><span id="state">show your hand</span><span id="pct"></span></div>
+        <div class="bar"><i id="conf"></i></div>
+      </div>
+    </div>
+    <button id="modeBtn" class="ghost">keyboard</button>
+    <button id="signsBtn" class="ghost" title="show what you type as hand signs, for whoever is watching your screen (s)">signs</button>
+    <button id="speak" class="ghost" title="speak the last sentence (enter)">speak</button>
+    <button id="gbtn" class="on" title="letter guide (g)">guide</button>
+  </div>
+  <div class="acts">
+    <button data-act="space">space</button>
+    <button data-act="stop">full stop</button>
+    <button data-act="delete">⌫ delete</button>
+    <button data-act="clear" id="clearBtn">clear</button>
+    <select id="camSel" aria-label="camera" title="which camera to use (c)"></select>
+  </div>
+  <div class="hint">hold a letter still to type it · guide → learn to practise · open hand swipe → space · ← delete · ↓ full stop · ↑ speak · both hands open: clear · s shows your text as signs · c switches camera · k camera ⇄ keyboard · h hides this</div>
+</div>
+
+<aside class="guide" id="guide" aria-label="letter guide">
+  <div class="ghead">
+    <div class="seg" id="modeSeg" title="spell: your letters type into the text · learn: practise one letter or a word"><button data-m="spell" class="on">spell</button><button data-m="learn">learn</button></div>
+    <span style="flex:1"></span>
+    <div class="seg" id="handSeg" title="which hand you spell with"><button data-h="right" class="on">right</button><button data-h="left">left</button></div>
+    <button class="ghost" id="gclose" aria-label="close guide" style="width:34px;padding:0">×</button>
+  </div>
+  <div class="focus" id="focus"></div>
+  <div class="gscroll">
+    <div class="grid" id="grid"></div>
+    <div class="gest">
+      <span class="sect">gestures · open hand, fingers spread</span>
+      <div><b>swipe →</b> space &nbsp; <b>swipe ←</b> delete</div>
+      <div><b>swipe ↓</b> full stop &nbsp; <b>swipe ↑</b> speak</div>
+      <div><b>both hands open</b>, held: clear</div>
+      <div><b>double letters</b>: relax or slide your hand a little, then hold again</div>
+      <div><b>j, z</b>: draw them in the air, don't hold</div>
+      <div><b>learn</b>: tap a letter to keep it on screen while you practise it, or type a word to practise it letter by letter. Nothing gets typed while you learn.</div>
+      <div><b>thumb letters</b> a e m n s t look alike to a camera, because the thumb hides behind the fingers. Face your palm to the screen, keep the thumb tip visible, and if one keeps failing, pick it here and press <b>teach</b> while you hold it. It learns your hand.</div>
+    </div>
+    <div class="honest">This covers fingerspelling only: the ASL alphabet, letter by letter. Real sign language is a full language with its own signs and grammar, and this is not a replacement for it or for an interpreter. Pictures are flipped to match the way you see yourself on screen.<br><br>Hand drawings: <a href="https://commons.wikimedia.org/wiki/Category:American_Sign_Language_letters" target="_blank" rel="noopener" style="color:inherit">wpclipart.com via Wikimedia Commons</a>, public domain. Open source on <a href="https://github.com/Mukundkapoor26/sign-speller" target="_blank" rel="noopener" style="color:inherit">GitHub</a>.</div>
+  </div>
+</aside>
+
+<div id="start">
+<pre>·  a  ─  b  ─  c  ─  d  ·</pre>
+  <h1>sign<span>/</span>speller</h1>
+  <p>Spell words with your hand using the ASL alphabet. Hold each letter still to type it. A picture of every letter stays on screen, so you can learn while you spell, then have it read out loud.</p>
+  <p style="font-size:11px">Fingerspelling only, not full sign language. Nothing leaves your device.</p>
+  <noscript><p>Sign Speller needs JavaScript and a webcam to read your hand.</p></noscript>
+  <div class="btns"><button id="go">start camera</button><button id="kb">use keyboard</button></div>
+  <p id="status">loading…</p>
+</div>
+
+<!-- ======================================================================
+     core: hand model, letter shapes, classifier and the spelling state machine.
+     Plain script with no DOM access, so it can be tested on its own.
+     ====================================================================== -->
+<script id="core">
+(function(G){
+'use strict';
+const D2R=Math.PI/180;
+const V=(x=0,y=0,z=0)=>({x,y,z});
+const add=(a,b)=>V(a.x+b.x,a.y+b.y,a.z+b.z), sub=(a,b)=>V(a.x-b.x,a.y-b.y,a.z-b.z), mul=(a,s)=>V(a.x*s,a.y*s,a.z*s);
+const dot=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z, cross=(a,b)=>V(a.y*b.z-a.z*b.y,a.z*b.x-a.x*b.z,a.x*b.y-a.y*b.x);
+const len=a=>Math.hypot(a.x,a.y,a.z), norm=a=>{ const l=len(a)||1; return mul(a,1/l); };
+const arr=a=>V(a[0],a[1],a[2]);
+const ang=(a,b)=>Math.acos(Math.max(-1,Math.min(1,dot(norm(a),norm(b)))))/D2R;
+const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
+
+// ---------- a simple 3D hand ----------
+// Local frame of a RIGHT hand: x toward the thumb side, y from wrist up the middle finger, z out of the palm.
+// Units are palm lengths (wrist to middle knuckle = 1). Landmark numbering follows MediaPipe.
+const FING=['I','M','R','P'];
+const IDX={I:[5,6,7,8],M:[9,10,11,12],R:[13,14,15,16],P:[17,18,19,20]};
+const MCP={I:V(.28,.93,0),M:V(0,1,0),R:V(-.22,.95,0),P:V(-.42,.84,0)};
+const SEG={I:[.43,.25,.21],M:[.47,.29,.22],R:[.44,.27,.21],P:[.35,.2,.19]};
+const CMC=V(.22,.15,.08), TSEG=[.38,.32,.26];
+
+// a finger from [spread, knuckle bend, middle bend, tip bend] in degrees; bending curls toward the palm
+function fingerChain(f,[sp,a,b,c]){
+  const d0=V(Math.sin(sp*D2R),Math.cos(sp*D2R),0), Z=V(0,0,1);
+  const pts=[MCP[f]]; let th=0, p=MCP[f];
+  [a,b,c].forEach((q,k)=>{ th+=q; const d=add(mul(d0,Math.cos(th*D2R)),mul(Z,Math.sin(th*D2R))); p=add(p,mul(d,SEG[f][k])); pts.push(p); });
+  return pts;
+}
+// the thumb is placed by where its tip goes, and solved back to its base (FABRIK)
+function ikChain(base,lens,target,pole){
+  const total=lens.reduce((s,l)=>s+l,0), bt=sub(target,base), dist=len(bt), dn=norm(bt);
+  if(dist>=total*.999){ const pts=[base]; let p=base; for(const l of lens){ p=add(p,mul(dn,l)); pts.push(p); } return pts; }
+  const pn=norm(sub(pole,mul(dn,dot(pole,dn))));
+  let pts=[base], acc=0;
+  for(const l of lens){ acc+=l; const u=acc/total; pts.push(add(add(base,mul(bt,u)),mul(pn,Math.sin(Math.PI*u)*total*.3))); }
+  for(let it=0;it<40;it++){
+    pts[pts.length-1]=target;
+    for(let k=pts.length-2;k>=0;k--) pts[k]=add(pts[k+1],mul(norm(sub(pts[k],pts[k+1])),lens[k]));
+    pts[0]=base;
+    for(let k=1;k<pts.length;k++) pts[k]=add(pts[k-1],mul(norm(sub(pts[k],pts[k-1])),lens[k-1]));
+  }
+  return pts;
+}
+
+// ---------- the ASL alphabet ----------
+// Checked against the Lifeprint / ASL University fingerspelling chart (lifeprint.com/asl101/fingerspelling/abc.htm).
+// o = orientation in camera space (x right, y down, z away from the camera): y = where the fingers point, z = where the palm faces.
+// The default palm faces the viewer, turned a little toward the signer's left ("10 o'clock"), as ASL teachers recommend.
+const OR={
+  def:{y:[0,-1,.1],z:[.35,0,-1]},
+  side:{y:[0,-1,.05],z:[1,0,-.3]},
+  semi:{y:[0,-1,.05],z:[.7,0,-.75]},
+  point:{y:[1,0,-.35],z:[.35,0,1]},       // G, H: fingers point to the signer's left, palm toward the signer
+  pdown:{y:[.45,.6,-.65],z:[0,.75,.7]},   // P: a K tipped forward and down
+  qdown:{y:[.25,1,-.25],z:[.3,0,1]},      // Q: a G pointing down
+};
+const FIST={I:[3,85,100,60],M:[0,88,100,60],R:[-3,88,100,60],P:[-6,85,100,60]};
+const f=(o)=>Object.assign({},FIST,o);
+const THUMB_ACROSS={at:[-.05,.8,.52],pole:[1,-.3,1]};   // thumb laid across the front of curled fingers
+const THUMB_HOLD={at:[-.14,.76,.47],pole:[1,0,1]};      // thumb holding ring + pinky down
+const POSES={
+  A:{f:FIST, t:{at:[.43,.92,.13],pole:[1,0,.3]}, cap:'fist, thumb up against the side of the index', xray:0},
+  B:{f:{I:[2,0,0,0],M:[0,0,0,0],R:[-2,0,0,0],P:[-5,0,0,0]}, t:{at:[-.04,.6,.14],pole:[.6,-.5,1]}, cap:'four fingers up together, thumb folded across the palm'},
+  C:{f:{I:[2,28,42,22],M:[0,28,42,22],R:[-2,28,42,22],P:[-4,28,42,22]}, t:{at:[.26,.62,.62],pole:[1,-.6,0]}, o:OR.side, cap:'curve the whole hand into a C, palm to the side'},
+  D:{f:f({I:[3,0,0,0],M:[0,60,80,35],R:[-3,62,80,35],P:[-6,64,80,35]}), t:{touch:'M',off:[.05,-.02,.05],pole:[1,0,0]}, o:OR.semi, cap:'index up, the other fingertips touch the thumb in a circle'},
+  E:{f:{I:[2,30,110,60],M:[0,30,110,60],R:[-2,32,110,60],P:[-5,35,110,60]}, t:{at:[-.12,.74,.3],pole:[1,-.2,1]}, cap:'fingertips bent down to rest on the thumb, which is tucked under them'},
+  F:{f:{I:[4,55,75,40],M:[2,0,0,0],R:[-8,0,0,0],P:[-16,0,0,0]}, t:{touch:'I',off:[.04,0,.05],pole:[1,0,.3]}, o:{y:[0,-1,.05],z:[.5,0,-.85]}, cap:'index and thumb touch in a circle, the other three up and spread'},
+  G:{f:f({I:[3,10,0,0]}), t:{at:[.55,.92,.24],pole:[1,0,0]}, o:OR.point, cap:'index and thumb point sideways, parallel'},
+  H:{f:f({I:[2,5,0,0],M:[0,5,0,0]}), t:THUMB_HOLD, o:OR.point, cap:'index and middle point sideways, together'},
+  I:{f:f({P:[-6,0,0,0]}), t:THUMB_ACROSS, cap:'pinky up, thumb across the other fingers'},
+  J:{f:f({P:[-6,0,0,0]}), t:THUMB_ACROSS, motion:'J', cap:'make an I, then draw a J in the air with the pinky'},
+  K:{f:f({I:[4,0,0,0],M:[-2,40,0,0]}), t:{at:[.1,1.06,.22],pole:[1,0,.3]}, o:{y:[0,-1,.1],z:[.5,0,-.85]}, cap:'index up, middle angled forward, thumb tip between them'},
+  L:{f:f({I:[3,0,0,0]}), t:{at:[.92,.48,.1],pole:[0,-1,0]}, cap:'index up and thumb out, like an L'},
+  M:{f:f({I:[3,65,95,45],M:[0,65,95,45],R:[-3,65,95,45]}), t:{at:[-.32,.8,.22],pole:[.4,-1,.6]}, cap:'three fingers folded over the thumb, thumb tip between ring and pinky', xray:1},
+  N:{f:f({I:[3,65,95,45],M:[0,65,95,45]}), t:{at:[-.11,.84,.24],pole:[.4,-1,.6]}, cap:'two fingers folded over the thumb, thumb tip between middle and ring', xray:1},
+  O:{f:{I:[3,50,75,40],M:[0,52,75,40],R:[-3,54,75,40],P:[-6,56,75,40]}, t:{touch:'I',off:[-.06,-.01,.04],pole:[1,-.5,0]}, o:{y:[0,-1,.05],z:[1,0,-.25]}, cap:'all fingertips meet the thumb in an O'},
+  P:{f:f({I:[4,0,0,0],M:[-2,40,0,0]}), t:{at:[.1,1.06,.22],pole:[1,0,.3]}, o:OR.pdown, cap:'a K tipped down: index forward, middle pointing down'},
+  Q:{f:f({I:[3,10,0,0]}), t:{at:[.55,.92,.24],pole:[1,0,0]}, o:OR.qdown, cap:'a G pointing down: index and thumb point at the floor'},
+  R:{f:f({I:[-12,8,0,0],M:[13,0,0,0]}), t:THUMB_HOLD, cap:'index and middle up and crossed, middle behind'},
+  S:{f:FIST, t:THUMB_ACROSS, cap:'fist, thumb across the front of the fingers'},
+  T:{f:f({I:[3,60,95,50]}), t:{at:[.14,.98,.3],pole:[1,0,.2]}, cap:'thumb tucked under the index, tip between index and middle', xray:1},
+  U:{f:f({I:[1,0,0,0],M:[-1,0,0,0]}), t:THUMB_HOLD, cap:'index and middle up, together'},
+  V:{f:f({I:[14,0,0,0],M:[-11,0,0,0]}), t:THUMB_HOLD, cap:'index and middle up and apart'},
+  W:{f:f({I:[11,0,0,0],M:[0,0,0,0],R:[-11,0,0,0],P:[-6,75,95,50]}), t:{touch:'P',off:[.04,0,.05],pole:[1,-.5,1]}, cap:'index, middle and ring up and apart, thumb holds the pinky'},
+  X:{f:f({I:[3,25,95,70]}), t:THUMB_ACROSS, o:OR.semi, cap:'index raised and bent into a hook'},
+  Y:{f:f({P:[-18,0,0,0]}), t:{at:[.92,.48,.1],pole:[0,-1,0]}, cap:'thumb and pinky out, other fingers down'},
+  Z:{f:f({I:[3,0,0,0]}), t:THUMB_ACROSS, motion:'Z', cap:'point with the index, then draw a Z in the air'},
+  // not letters: shapes the classifier must know so it can say "that's not a letter"
+  open:{f:{I:[12,0,0,0],M:[2,0,0,0],R:[-8,0,0,0],P:[-20,0,0,0]}, t:{at:[.85,.55,.12],pole:[0,-1,0]}},
+  one:{f:f({I:[3,0,0,0]}), t:THUMB_ACROSS},
+};
+const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const STATIC=LETTERS.filter(l=>!POSES[l].motion).concat(['open','one']);
+
+function poseLocal(spec,rng,amt=1){
+  const P=new Array(21); P[0]=V(0,0,0); P[1]=CMC;
+  const J=s=>rng?rng.g()*s*amt:0;
+  for(const fn of FING){ const a=spec.f[fn].slice(); a[0]+=J(4); a[1]+=J(9); a[2]+=J(10); a[3]+=J(8);
+    fingerChain(fn,a).forEach((p,k)=>P[IDX[fn][k]]=p); }
+  const t=spec.t; let target=t.touch?add(P[IDX[t.touch][3]],arr(t.off||[0,0,0])):arr(t.at);
+  target=add(target,V(J(.045),J(.045),J(.045)));
+  const th=ikChain(CMC,TSEG,target,arr(t.pole||[1,0,.5]));
+  P[2]=th[1]; P[3]=th[2]; P[4]=th[3];
+  return P;
+}
+function frameFrom(o){ const Y=norm(arr(o.y)); let Z=arr(o.z); Z=norm(sub(Z,mul(Y,dot(Z,Y)))); return {X:cross(Y,Z),Y,Z}; }
+const toCam=(p,F)=>add(add(mul(F.X,p.x),mul(F.Y,p.y)),mul(F.Z,p.z));
+function rotAxis(v,k,a){ const c=Math.cos(a), s=Math.sin(a); return add(add(mul(v,c),mul(cross(k,v),s)),mul(k,dot(k,v)*(1-c))); }
+
+// MediaPipe-shaped landmarks for a letter (clean, or with noise for testing)
+function synth(letter,rng,o={}){
+  const spec=POSES[letter]; const P=poseLocal(spec,rng,o.noise??1);
+  let oy=arr((spec.o||OR.def).y), oz=arr((spec.o||OR.def).z);
+  if(rng&&o.tilt){ const k=norm(V(rng.g(),rng.g(),rng.g())), a=rng.g()*o.tilt*D2R; oy=rotAxis(oy,k,a); oz=rotAxis(oz,k,a);
+    const r=rng.g()*(o.roll||0)*D2R, kz=V(0,0,1); oy=rotAxis(oy,kz,r); oz=rotAxis(oz,kz,r); }
+  const F=frameFrom({y:[oy.x,oy.y,oy.z],z:[oz.x,oz.y,oz.z]});
+  const sc=.085*(o.scale||1), dz=o.depth||1, left=!!o.left;
+  let cam=P.map(p=>{ const c=mul(toCam(p,F),sc); return V(left?-c.x:c.x,c.y,c.z*dz); });
+  const n=rng?(s=>rng.g()*s):(()=>0), jit=(o.jitter??.0015);
+  const ctr=cam.reduce((s,p)=>add(s,p),V()); const m=mul(ctr,1/21);
+  const world=cam.map(p=>({x:p.x-m.x+n(jit),y:p.y-m.y+n(jit),z:p.z-m.z+n(jit)}));
+  const D=o.dist||.55, fpx=900, W=1280, H=720, ox=o.ox||0, oy2=o.oy||0;
+  const image=cam.map(p=>{ const z=D+p.z; return { x:.5+ox+(p.x*fpx/z)/W+n(jit*.04), y:.5+oy2+(p.y*fpx/z)/H+n(jit*.04), z:p.z-cam[0].z }; });
+  return { world, image, handed: left?'Right':'Left' };   // MediaPipe labels assume a mirrored picture
+}
+
+// ---------- features ----------
+const FEAT_NAMES=['pdI','pdM','pdR','pdP','flI','flM','flR','flP','gapIM','tx','ty','tz','dTI','dTM','dTP','tOut','handUp','idxUp','midUp','tFront'];
+const SIG=[.38,.38,.38,.38, .32,.32,.32,.32, .1, .13,.13,.17, .14,.14,.17,.17, .45,.5,.5, .1];
+function features(world,image,aspect=16/9,ctx={}){
+  const P=world.map(p=>V(p.x,p.y,p.z));
+  const palm=len(sub(P[9],P[0]))||1e-6;
+  const Y=norm(sub(P[9],P[0])); let X=sub(P[5],P[17]); X=norm(sub(X,mul(Y,dot(X,Y)))); let Z=cross(X,Y);
+  // which way the palm faces: curled fingers always fold toward the palm, so they tell us (no need to trust left/right labels)
+  let c=0; for(const fn of FING){ const [m,p,,t]=IDX[fn]; c+=dot(sub(add(P[p],P[t]),mul(P[m],2)),Z)/2; } c/=palm;
+  let s; if(Math.abs(c)>.25){ s=Math.sign(c); if(ctx.label) ctx.map=Object.assign(ctx.map||{}, {[ctx.label]:s}); ctx.s=s; }
+  else s=(ctx.map&&ctx.label&&ctx.map[ctx.label])||ctx.s||1;
+  Z=mul(Z,s);
+  const L=P.map(p=>{ const d=sub(p,P[0]); return V(dot(d,X)/palm,dot(d,Y)/palm,dot(d,Z)/palm); });
+  const pd=[], fl=[];
+  for(const fn of FING){ const [m,p,d,t]=IDX[fn]; const a=sub(L[p],L[m]), b=sub(L[d],L[p]), e=sub(L[t],L[d]);
+    pd.push((ang(a,b)+ang(b,e))/100); fl.push(Math.atan2(a.z,a.y)/D2R/100); }
+  const q=image.map(p=>V(p.x*aspect,p.y,0));
+  const up=(a,b)=>{ const d=sub(q[b],q[a]); return -d.y/(Math.hypot(d.x,d.y)||1); };
+  const T=L[4];
+  return { v:[...pd,...fl, L[8].x-L[12].x, T.x,T.y,T.z, len(sub(T,L[8])),len(sub(T,L[12])),len(sub(T,L[20])),len(sub(T,L[5])), up(0,9),up(5,8),up(9,12), T.z-(L[6].z+L[10].z+L[14].z)/3],
+           L, flip:s<0, c };
+}
+
+// ---------- classifier: soft nearest-template ----------
+// Templates come from three places:
+//  1. real MediaPipe readings of ASL alphabet photos (Lifeprint / ASL University; only the numbers are kept, not the photos),
+//     tagged by photo set so the tests can hold one set out;
+//  2. the hand model above, corrected per feature (CAL) to match how MediaPipe reports a real hand, which fills in
+//     letters with few photos;
+//  3. your own samples from "teach", which matter most for the thumb letters (a e m n s t).
+// Features describing where a curled finger points are down-weighted.
+const CAL={a:[0.437,0.684,0.652,0.588,0.6,0.686,0.82,0.901,0.852,0.841,0.546,0.444,0.408,0.467,0.74,0.372,1,1,1,0.738],b:[0.491,0.397,0.255,0.376,0.101,0.065,0.037,-0.096,-0.074,0.053,0.663,0.247,0.333,0.328,0.241,0.339,0,0,0,0.118]};
+const REAL=[
+["A",0,1.42,1.6,1.43,1.46,0.53,0.58,0.55,0.44,0.16,0.35,1.47,0.08,0.69,0.83,1.19,0.43,0.97,-0.99,-1,-0.27],
+["A",0,1.44,1.65,1.47,1.6,0.64,0.72,0.78,0.59,0.23,0.46,1.45,0.26,0.71,0.87,1.23,0.49,0.98,-1,-0.98,-0.16],
+["B",0,0.44,0.39,0.25,0.23,0.13,0.08,0.14,0.09,0.22,-0.17,0.96,0.58,0.76,0.84,0.55,0.65,1,0.99,0.99,0.47],
+["B",0,0.47,0.3,0.26,0.29,0.1,0.03,0.13,0.03,0.21,-0.17,1.06,0.56,0.8,0.89,0.57,0.63,1,0.99,0.99,0.48],
+["C",0,0.57,0.6,0.64,0.68,0.08,0.14,0.14,-0.07,0.21,0.19,0.86,0.92,0.94,0.95,0.96,0.86,0.78,0.38,0.36,0.82],
+["C",0,0.67,0.48,0.33,0.37,0.03,-0.03,0,0.08,0.06,1.04,0.98,-0.17,0.97,1.23,1.02,0.9,0.59,0.49,0.48,-0.19],
+["D",0,0.59,1.38,1.72,1.63,0.06,0.21,0.61,0.47,0.47,-0.1,1,0.53,1,0.26,0.56,0.52,0.86,0.92,-0.36,0.42],
+["D",0,0.36,0.94,1.04,1.01,0.07,0.44,0.37,0.47,0.79,-0.36,0.7,0.7,1.53,0.47,0.2,0.85,0.85,0.94,-0.35,0.47],
+["E",0,1.27,1.38,1.34,1.3,0.31,0.34,0.34,0.2,0.21,-0.05,0.87,0.35,0.32,0.17,0.28,0.43,0.99,0.75,0.61,0.12],
+["E",0,1.31,1.49,1.29,1.35,0.31,0.4,0.4,0.17,0.2,-0.12,0.84,0.32,0.37,0.21,0.28,0.45,0.99,0.82,0.38,0.09],
+["F",0,0.72,0.45,0.33,0.47,0.27,-0.04,-0.08,-0.21,0.21,0.26,1.18,0.48,0.24,0.8,1.06,0.44,0.99,0.49,0.99,0.43],
+["F",0,0.66,0.46,0.23,0.46,0.22,-0.07,-0.03,-0.22,0.18,0.16,1.21,0.49,0.21,0.75,1.03,0.47,0.99,0.93,0.99,0.45],
+["G",0,0.77,1.11,1.09,1.01,0.52,0.62,0.87,0.89,0.03,0.04,1.14,0.39,0.47,0.54,0.61,0.4,0.98,0.06,-0.11,0.19],
+["G",0,0.55,1,1.05,1.23,0.77,0.78,0.92,0.8,0.11,-0.03,1.15,0.49,0.58,0.75,0.75,0.52,0.99,0.07,-0.09,0.16],
+["I",0,1.37,1.65,1.24,0.36,0.72,0.66,0.82,0.01,0.11,0.25,1.16,0.16,0.46,0.55,0.97,0.15,0.96,-0.96,-1,-0.24],
+["I",0,1.32,1.63,1.21,0.34,0.73,0.8,0.88,0.07,0.21,0.14,1.11,0.22,0.48,0.54,0.83,0.21,0.97,-0.99,-1,-0.18],
+["K",0,0.33,1.27,0.84,0.8,0.22,0.1,0.6,0.57,0.31,0.48,1.27,0.19,0.39,0.43,0.85,0.53,0.99,1,0.79,0.09],
+["L",0,0.44,1.57,1.37,1.25,-0.23,0.45,0.64,0.44,0.01,1.03,0.98,0.07,1.28,1.03,1.34,0.8,0.96,1,-0.97,-0.09],
+["L",0,0.39,1.38,1.29,1.25,-0.1,0.57,0.76,0.59,0.17,1.01,0.94,0.19,1.24,1.11,1.35,0.78,0.97,1,-0.98,-0.02],
+["M",0,1.08,1.44,1.42,1.3,0.68,0.63,0.7,0.82,0.18,-0.22,0.9,0.34,0.48,0.3,0.41,0.56,0.98,-0.84,-1,-0.02],
+["M",0,1.1,1.29,1.32,1.24,0.6,0.6,0.63,0.66,0.21,-0.13,0.89,0.33,0.41,0.36,0.44,0.46,0.99,-0.93,-1,-0.05],
+["O",0,1.05,1.12,1.09,0.91,0.43,0.45,0.39,0.48,0.15,0.68,0.92,0.64,0.41,0.57,0.93,0.72,0.99,0.35,0.29,0.33],
+["O",0,0.86,1.14,0.91,1.03,0.5,0.52,0.54,0.42,0.04,1.2,1.34,0.36,1.2,1.25,1.61,1.02,0.99,0.33,0.24,0.09],
+["P",0,0.66,0.87,1.27,1.26,0.07,0.6,0.78,0.86,0.39,0.02,1.19,0.28,0.54,0.87,0.74,0.36,0.31,-0.01,-0.91,0.05],
+["P",0,0.3,0.56,1.12,1,-0.02,0.56,1.09,1.03,-0.2,0.31,1.14,0.21,0.71,0.58,0.8,0.3,0.47,-0.22,-0.89,0.09],
+["Q",0,0.86,1.45,1.21,1.35,0.62,0.75,1,0.82,0.14,0.02,1.04,0.61,0.38,0.7,0.59,0.59,0.01,-0.95,-0.88,0.39],
+["R",0,0.32,0.37,1.48,1.36,0.2,0.17,0.6,0.68,-0.08,-0.12,1.07,0.55,0.6,0.73,0.61,0.59,0.99,0.93,1,0.35],
+["R",0,0.41,0.27,1.34,1.55,0.25,0.32,0.75,0.75,-0.09,-0.05,1.05,0.56,0.62,0.78,0.65,0.55,1,0.95,1,0.28],
+["S",0,1.51,2.01,1.72,1.72,0.61,0.74,0.89,0.74,0.14,-0.12,1.03,0.48,0.44,0.44,0.53,0.57,0.99,-0.94,-0.81,0.08],
+["S",0,1.43,1.97,1.74,1.89,0.61,0.8,0.93,0.8,0.22,-0.02,1.06,0.42,0.45,0.37,0.64,0.46,1,-0.99,-0.94,0.03],
+["T",0,1.04,1.38,1.32,1.26,0.44,0.66,0.83,0.83,0.09,0.08,1.37,0.38,0.57,0.75,1.04,0.5,1,0.96,-0.95,0.02],
+["T",0,1.07,1.54,1.35,1.4,0.59,0.77,0.95,0.89,0.19,0.1,1.45,0.29,0.66,0.82,1.17,0.5,1,0.76,-0.92,-0.11],
+["U",0,0.39,0.32,1.38,1.23,0.05,0.11,0.56,0.55,0.24,-0.06,1.1,0.5,0.74,0.77,0.54,0.52,1,1,1,0.34],
+["U",0,0.41,0.32,1.18,1.42,0.17,0.18,0.68,0.65,0.17,-0.02,1.07,0.65,0.74,0.88,0.62,0.64,1,1,1,0.42],
+["V",0,0.49,0.3,1.17,1.13,-0.09,-0.01,0.51,0.45,0.6,-0.14,1.19,0.56,0.92,0.85,0.52,0.59,1,0.97,0.96,0.46],
+["V",0,0.52,0.36,1.24,1.27,-0.02,-0.06,0.53,0.49,0.58,-0.09,1.18,0.55,0.89,0.89,0.57,0.59,1,0.97,0.97,0.45],
+["W",0,0.41,0.34,0.31,0.93,0.11,-0.05,0.17,0.34,0.42,-0.17,0.98,0.55,0.93,0.98,0.21,0.6,1,0.98,1,0.47],
+["W",0,0.37,0.24,0.15,1.16,0.07,0,0.13,0.28,0.41,-0.09,1.06,0.51,0.85,0.95,0.24,0.54,1,0.98,1,0.45],
+["X",0,1.04,1.43,1.33,1.47,0.21,0.79,0.94,0.87,-0.16,0.52,0.87,0.47,0.55,0.39,0.84,0.49,0.96,0.73,-0.36,0.14],
+["X",0,0.88,1.52,1.38,1.41,0.16,0.75,0.96,0.87,-0.23,0.51,0.93,0.46,0.68,0.45,0.8,0.48,0.94,0.74,-0.38,0.19],
+["Y",0,1.38,1.64,1.21,0.32,0.52,0.49,0.47,-0.17,0.1,1.03,0.96,0.01,0.89,0.98,1.69,0.77,1,-1,-0.95,-0.28],
+["Y",0,1.33,1.69,1.27,0.41,0.57,0.6,0.64,-0.12,0.16,1.08,0.98,0.03,1.01,1.11,1.82,0.8,1,-0.97,-0.91,-0.35],
+["C",0,0.91,0.85,0.85,0.65,0.1,0.2,0.2,0.12,0.18,0.87,0.96,0.26,0.97,1.14,1.36,0.66,0.98,0.88,0.83,0.13],
+["C",0,0.91,0.81,0.7,0.68,0.02,0.17,0.19,0.03,0.18,0.66,0.9,0.29,0.84,1,1.22,0.5,0.98,0.9,0.85,0.19],
+["D",0,0.37,1.08,1.06,1.06,-0.22,0.13,0.12,-0.1,0.24,0,1.18,0.54,0.99,0.14,0.43,0.55,0.97,1,-0.08,0.51],
+["D",0,0.42,1.11,1.03,1.12,-0.18,0.23,0.24,0.02,0.2,0,1.05,0.59,1.02,0.14,0.37,0.56,0.98,1,-0.04,0.5],
+["A",1,1.44,1.61,1.44,1.46,0.51,0.55,0.53,0.42,0.15,0.34,1.45,0.07,0.67,0.81,1.16,0.4,0.97,-0.99,-1,-0.27],
+["A",1,1.45,1.63,1.48,1.59,0.66,0.73,0.78,0.6,0.24,0.46,1.45,0.29,0.71,0.88,1.23,0.49,0.99,-0.99,-0.98,-0.13],
+["B",1,0.41,0.32,0.24,0.27,0.15,0.11,0.16,0.12,0.17,0.21,1.1,0.61,0.62,0.81,0.72,0.55,1,0.99,0.99,0.5],
+["B",1,0.37,0.35,0.19,0.34,0.14,0.13,0.19,0.06,0.19,0.14,1.1,0.58,0.58,0.8,0.72,0.52,1,0.99,0.99,0.46],
+["B",1,0.29,0.17,0.16,0.31,0.24,0.13,0.11,0.17,0.16,0.13,1.18,-0.34,0.85,0.98,0.73,0.3,0.88,0.98,0.98,-0.4],
+["B",1,0.42,0.31,0.26,0.16,0.16,0.14,0.2,0.19,0.22,-0.18,0.93,0.54,0.78,0.84,0.53,0.64,1,0.99,0.99,0.41],
+["B",1,0.52,0.32,0.19,0.26,0.11,0.04,0.14,0.06,0.19,-0.19,0.99,0.55,0.83,0.93,0.58,0.64,1,0.99,0.99,0.47],
+["C",1,0.3,0.48,0.47,0.82,0.12,0.04,0.06,0.01,0.25,-0.03,1,0.87,0.93,0.98,0.73,0.86,0.78,0.52,0.57,0.83],
+["C",1,0.58,0.42,0.18,0.52,0.06,0.11,0.26,0.32,0.22,0.07,1.15,0.54,0.64,0.78,0.52,0.51,0.1,0.1,0.16,0.48],
+["D",1,2.09,1.33,2.28,3.14,-0.13,-0.56,0.82,-0.3,0.58,-0.36,0.95,0.43,0.71,0.27,0.41,0.42,0.78,0.91,-0.42,0.49],
+["D",1,0.69,0.84,0.85,0.5,0.29,0.32,0.33,-0.05,-0.17,0.6,1.08,0.38,0.56,0.51,1.29,0.51,0.63,0.09,-0.35,0.16],
+["E",1,1.24,1.34,1.33,1.33,0.35,0.37,0.37,0.21,0.2,-0.08,0.85,0.34,0.35,0.19,0.26,0.46,0.99,0.75,0.62,0.1],
+["E",1,1.26,1.44,1.33,1.41,0.35,0.43,0.41,0.2,0.21,-0.12,0.84,0.31,0.36,0.19,0.28,0.44,0.99,0.77,0.3,0.08],
+["E",1,1.14,1.43,1.37,1.27,0.3,0.23,0.21,0.28,0.19,-0.19,0.86,0.34,0.45,0.29,0.18,0.53,1,0.18,-0.36,0.16],
+["E",1,1.13,1.45,1.34,1.28,0.29,0.28,0.32,0.39,0.2,-0.11,0.91,0.42,0.33,0.18,0.29,0.5,1,0.75,-0.06,0.2],
+["E",1,1.18,1.38,1.62,1.71,0.15,0.21,0.51,0.43,0.14,-0.1,1.05,0.27,0.38,0.28,0.47,0.4,1,0.93,0.88,0.06],
+["E",1,1.1,1.73,1.62,1.78,0.16,0.27,0.66,0.7,0.18,-0.02,1.04,0.39,0.26,0.1,0.58,0.4,1,0.96,0.62,0.15],
+["F",1,0.64,0.42,0.34,0.48,0.29,-0.02,-0.07,-0.19,0.21,0.26,1.21,0.49,0.27,0.79,1.07,0.45,0.99,0.63,0.99,0.42],
+["F",1,0.65,0.47,0.21,0.44,0.24,-0.05,-0.05,-0.25,0.18,0.14,1.2,0.51,0.2,0.75,1.03,0.48,0.99,0.86,0.99,0.46],
+["G",1,0.81,1.15,1.08,1.07,0.56,0.67,0.79,0.89,0.05,0.17,1.23,0.42,0.59,0.72,0.71,0.5,1,0.04,-0.14,0.23],
+["G",1,0.76,1.04,0.98,1.29,0.83,0.83,0.96,0.82,0.16,0,1.05,0.42,0.52,0.63,0.69,0.46,0.99,0.06,-0.05,0.14],
+["G",1,0.26,1.91,1.57,1.57,0.32,0.69,0.94,0.71,-0.08,0.17,1.21,0.61,0.33,0.67,0.82,0.61,0.78,0.13,-0.62,0.32],
+["G",1,0.43,1.84,1.62,1.67,0.41,0.95,1.07,0.96,-0.11,0.11,1.05,0.55,0.34,0.53,0.74,0.49,0.78,0.05,-0.87,0.21],
+["H",1,0.33,0.24,1.37,1.32,0.08,0.11,0.67,0.73,0.28,-0.09,1.13,0.54,0.66,0.78,0.67,0.56,0.61,0.14,0.09,0.37],
+["H",1,0.37,0.25,1.38,1.6,0.08,0.24,0.79,0.73,0.16,-0.05,1.04,0.5,0.79,0.91,0.61,0.52,0.5,0.12,0.16,0.28],
+["I",1,1.02,1.1,0.67,0.44,0.7,0.69,0.66,-0.02,0.03,0.47,1.15,0.25,0.53,0.6,1.11,0.3,0.93,-0.95,-0.92,-0.08],
+["I",1,0.89,1.05,0.61,0.35,0.81,0.81,0.87,-0.01,0.12,0.49,0.98,0.28,0.53,0.59,1.13,0.34,0.99,-0.8,-0.81,-0.06],
+["I",1,1.4,1.68,1.29,0.28,0.68,0.61,0.75,-0.08,0.09,0.24,1.15,0.13,0.48,0.51,0.92,0.12,0.96,-0.97,-1,-0.27],
+["I",1,1.33,1.66,1.21,0.31,0.73,0.8,0.88,0.11,0.22,0.14,1.12,0.16,0.49,0.56,0.82,0.19,0.98,-1,-1,-0.23],
+["K",1,0.32,0.29,1.13,1.38,0.01,0.58,0.8,0.78,0.58,0.16,1.44,0.5,0.7,0.6,1.02,0.55,0.93,0.97,0.48,0.21],
+["K",1,0.65,0.72,1.22,1.13,0.08,0.62,0.85,0.81,0.77,0,1.33,0.4,0.86,0.46,1.01,0.49,0.95,0.96,0.11,0.16],
+["K",1,1.14,1.12,1.29,0.29,0.63,0.68,0.49,0.14,0.06,0.2,1.11,0.28,0.4,0.33,0.67,0.23,0.78,-0.85,-0.93,0.01],
+["L",1,0.52,1.5,1.36,1.19,-0.19,0.52,0.71,0.54,-0.02,0.98,1.03,0.11,1.22,0.97,1.26,0.75,0.96,1,-0.98,-0.07],
+["L",1,0.42,1.39,1.25,1.23,-0.1,0.59,0.77,0.64,0.14,0.99,0.97,0.21,1.23,1.09,1.33,0.75,0.97,1,-0.99,-0.01],
+["M",1,0.84,0.65,0.63,0.88,0.55,0.6,0.62,0.96,0.24,-0.2,0.92,0.35,0.54,0.47,0.58,0.55,0.98,0.93,0.79,0.04],
+["M",1,0.84,0.6,0.38,1.12,0.62,0.62,0.71,0.91,0.18,-0.29,0.89,0.35,0.6,0.59,0.54,0.63,1,0.79,0.52,0.02],
+["M",1,1.02,1.25,1.24,1.23,0.7,0.67,0.74,0.9,0.2,-0.24,0.88,0.38,0.52,0.35,0.49,0.6,0.97,-0.74,-0.99,0.02],
+["M",1,1.26,1.39,1.29,1.33,0.32,0.16,0.21,0.03,0.18,0.17,1.14,0.44,0.19,0.13,0.46,0.37,0.95,-0.86,-1,0.26],
+["N",1,0.96,1.26,1.28,1.3,0.54,0.5,0.83,0.77,0.17,-0.22,1.13,0.45,0.53,0.36,0.72,0.61,0.99,-1,-0.89,0.1],
+["N",1,1.01,1.12,1.16,1.37,0.59,0.61,0.92,0.9,0.16,-0.21,1.14,0.4,0.56,0.46,0.65,0.61,1,-0.93,-0.85,0.03],
+["O",1,0.94,0.91,0.91,0.95,0.21,0.25,0.19,0.06,0.12,0.16,1.1,0.63,0.1,0.19,0.56,0.56,1,0.17,0.23,0.46],
+["O",1,1.03,1.11,0.92,1.05,0.27,0.23,0.28,0.1,0.2,0.19,1.05,0.58,0.08,0.23,0.62,0.52,1,0.37,0.27,0.43],
+["O",1,1.58,1.71,1.47,1.51,0.18,0.33,0.47,0.2,0.14,0.13,1.28,0.18,0.42,0.41,0.69,0.32,0.37,0.12,0.19,0.03],
+["O",1,1.09,1.18,1.19,1.03,0.06,0.12,0.11,0.06,0.19,0.16,1.11,0.58,0.17,0.21,0.49,0.52,0.95,0.64,0.37,0.48],
+["O",1,1.03,1.17,1.09,1.21,0.12,0.19,0.2,0.04,0.17,0.13,1.06,0.48,0.23,0.24,0.52,0.41,0.95,0.74,0.39,0.33],
+["P",1,0.45,0.69,1.08,1.17,0.02,0.64,0.98,0.98,0.6,0,1.26,0.32,0.72,0.87,0.79,0.45,0.21,0.01,-0.91,0.13],
+["P",1,0.41,0.54,1,1.12,0.1,0.68,1.1,0.9,-0.07,0.22,1.19,0.33,0.63,0.56,0.85,0.34,0.45,-0.16,-0.93,0.17],
+["P",1,0.35,0.56,1.18,1.26,0,0.42,0.79,0.76,0.08,0.18,1.18,0.26,0.75,0.54,0.71,0.32,0.15,0.05,-0.89,0.07],
+["P",1,0.38,0.6,1.11,1.26,0.12,0.58,0.92,0.87,-0.05,0.14,1.22,0.29,0.7,0.52,0.73,0.32,0.3,-0.02,-0.88,0.08],
+["P",1,0.72,0.95,1.17,1.03,-0.03,0.16,0.89,0.42,0.08,-0.09,0.97,0.46,0.83,0.21,0.12,0.41,-0.05,-0.33,-0.99,0.39],
+["P",1,0.39,0.51,0.54,0.53,0.22,0.7,0.66,0.63,0.31,-0.08,0.99,0.47,0.8,0.34,0.28,0.48,-0.17,-0.35,-0.99,0.22],
+["Q",1,0.6,1.41,1.13,1.15,0.63,0.61,0.86,0.9,0.01,0.05,1.01,0.6,0.29,0.56,0.58,0.59,0.01,-0.97,-0.93,0.36],
+["R",1,0.33,0.31,1.48,1.34,0.21,0.15,0.57,0.68,-0.07,-0.15,1.07,0.51,0.59,0.76,0.59,0.58,0.99,0.93,1,0.32],
+["R",1,0.37,0.37,1.28,1.46,0.21,0.28,0.72,0.75,-0.08,-0.07,1.09,0.53,0.62,0.76,0.66,0.55,1,0.94,1,0.27],
+["S",1,1.53,1.99,1.7,1.76,0.63,0.76,0.9,0.77,0.16,-0.15,1.02,0.48,0.46,0.41,0.53,0.59,0.99,-0.96,-0.75,0.08],
+["S",1,1.51,1.99,1.75,1.86,0.65,0.83,0.96,0.86,0.22,-0.03,1,0.48,0.45,0.4,0.6,0.5,1,-1,-0.96,0.1],
+["T",1,1.06,1.39,1.3,1.26,0.5,0.72,0.86,0.85,0.08,0.07,1.33,0.43,0.56,0.74,1.02,0.5,1,0.5,-0.94,0.06],
+["T",1,1.11,1.53,1.37,1.44,0.56,0.79,0.95,0.88,0.17,0.1,1.43,0.3,0.67,0.81,1.16,0.5,1,0.9,-0.93,-0.1],
+["U",1,0.41,0.36,1.4,1.26,0.08,0.16,0.59,0.59,0.22,-0.04,1.09,0.52,0.71,0.72,0.55,0.53,1,1,1,0.34],
+["U",1,0.38,0.26,1.18,1.4,0.14,0.2,0.7,0.64,0.17,-0.02,1.1,0.62,0.75,0.82,0.59,0.61,1,1,1,0.38],
+["V",1,0.51,0.19,1.18,1.17,-0.09,0,0.53,0.46,0.61,-0.15,1.19,0.56,0.94,0.85,0.54,0.59,1,0.97,0.97,0.44],
+["V",1,0.55,0.33,1.22,1.27,-0.02,-0.06,0.51,0.45,0.56,-0.09,1.18,0.53,0.9,0.89,0.55,0.58,1,0.97,0.97,0.44],
+["W",1,0.49,0.31,0.32,0.92,0.1,-0.08,0.14,0.32,0.43,-0.15,1,0.58,0.92,1,0.22,0.62,1,0.98,0.99,0.52],
+["W",1,0.39,0.28,0.14,1.15,0.08,0,0.14,0.26,0.4,-0.09,1.06,0.49,0.83,0.93,0.24,0.52,1,0.98,0.99,0.43],
+["W",1,0.4,0.3,0.15,0.27,0.08,-0.13,0.17,0.58,0.34,-0.27,0.99,0.7,0.96,1.23,0.06,0.78,0.97,0.88,1,0.65],
+["W",1,0.37,0.35,0.18,0.68,0.1,-0.16,0.24,0.65,0.36,-0.24,0.89,0.63,1,1.27,0.13,0.74,0.98,0.89,1,0.59],
+["W",1,0.47,0.21,0.07,0.19,0.17,-0.01,0.13,0.52,0.32,-0.18,0.92,0.48,0.84,1.08,0.27,0.54,0.98,0.92,1,0.39],
+["W",1,0.42,0.34,0.13,0.46,0.13,-0.11,0.1,0.44,0.28,-0.18,1.04,0.53,0.8,1.02,0.15,0.6,0.99,0.92,1,0.49],
+["W",1,0.44,0.24,0.31,0.72,-0.02,-0.2,0.17,0.4,0.38,-0.29,0.93,0.49,1.08,1.19,0.14,0.63,1,0.98,0.99,0.47],
+["W",1,0.33,0.36,0.1,0.93,0.12,0.26,-0.21,-0.39,0.33,-0.27,1.03,-0.51,1.03,1.26,0.13,0.63,1,0.98,0.99,-0.53],
+["X",1,0.84,1.88,1.69,1.67,0.05,0.58,0.8,0.63,0.14,-0.13,1.08,0.68,0.59,0.62,0.63,0.71,1,0.8,-0.97,0.42],
+["X",1,1.05,1.53,1.46,1.5,0.15,0.8,0.9,0.84,-0.15,0.53,0.85,0.39,0.59,0.39,0.8,0.45,0.95,0.76,-0.43,0.08],
+["X",1,0.8,1.59,1.36,1.39,0.17,0.75,0.96,0.91,-0.21,0.48,0.91,0.44,0.64,0.42,0.75,0.46,0.94,0.74,-0.37,0.19],
+["Y",1,1.45,1.65,1.2,0.33,0.49,0.46,0.41,-0.21,0.12,0.99,0.97,0.03,0.82,0.93,1.63,0.72,1,-1,-0.93,-0.25],
+["Y",1,1.35,1.7,1.28,0.4,0.57,0.6,0.65,-0.1,0.16,1.08,0.99,0.03,1,1.11,1.82,0.8,1,-0.98,-0.92,-0.36],
+["open",1,0.53,0.46,0.32,0.41,0.02,0.06,0.08,-0.09,0.35,0.89,0.97,0.43,0.95,1.29,1.76,0.75,0.99,0.95,0.99,0.36],
+["open",1,0.47,0.38,0.33,0.5,-0.03,0.02,0.02,0.01,0.32,1,0.99,0.23,1.03,1.36,1.87,0.71,1,0.94,0.99,0.19]];
+let TEMPL=[];
+function buildTemplates(user={},opt={}){
+  TEMPL=[];
+  for(const k of STATIC){ const s=synth(k,null); const v=features(s.world,s.image).v.map((x,i)=>CAL.a[i]*x+CAL.b[i]); TEMPL.push({label:k,v,w:weights(v)}); }
+  if(!opt.noEmbedded) for(const r of REAL){ if(opt.exclude!=null&&r[1]===opt.exclude) continue; const v=r.slice(2); TEMPL.push({label:r[0],v,w:weights(v)}); }
+  for(const [k,list] of Object.entries(user)) for(const v of list) if(v&&v.length===FEAT_NAMES.length) TEMPL.push({label:k,v,w:weights(v),user:true});
+}
+function weights(v){ const w=FEAT_NAMES.map(()=>1);
+  if(v[0]>.9) w[17]=.15; if(v[1]>.9) w[18]=.15;     // curled index / middle: ignore its direction
+  w[16]=.8; w[11]=.8; return w; }
+function classify(fv){
+  const best={};
+  for(const t of TEMPL){ let d=0, ws=0;
+    for(let i=0;i<fv.length;i++){ const z=(fv[i]-t.v[i])/SIG[i]; d+=t.w[i]*Math.min(9,z*z); ws+=t.w[i]; }
+    const dn=d/ws*(t.user?.85:1);
+    if(!(t.label in best)||dn<best[t.label]) best[t.label]=dn; }
+  const list=Object.entries(best).map(([label,d])=>({label,d,s:Math.exp(-1.2*d)})).sort((a,b)=>a.d-b.d);
+  return list;
+}
+function confidence(list){
+  if(!list.length) return 0; const a=list[0], b=list[1]||{d:9};
+  const fit=Math.exp(-.9*a.d), margin=clamp((b.d-a.d)/Math.max(.35,b.d)*1.6);
+  return clamp(fit*.55+margin*.45)*clamp(1.6-a.d*.5);
+}
+
+// ---------- the speller: hands in, typing events out ----------
+const HOLD=450, CONF_MIN=.38, MOVE_MAX=1.1;
+class Speller{
+  constructor(){ this.reset(); }
+  reset(){ Object.assign(this,{ ema:null, hold:null, holdT0:0, miss:0, latched:null, away:0, latchPos:null, last:null, prevC:null, speed:0,
+    trail:[], cool:0, bothOpen:null, ctx:{}, lastCommit:null, view:{label:null,conf:0,progress:0,state:'idle'} }); }
+  step(hands,t,aspect=16/9){
+    const ev=[]; const dt=this.last==null?33:Math.min(200,Math.max(1,t-this.last)); this.last=t;
+    const V0={label:null,conf:0,progress:0,state:'idle',top:[],hand:-1};
+    if(!hands||!hands.length){ this._noHand(dt); this.view=V0; return {events:ev,view:V0}; }
+    // read every hand
+    const read=hands.map((h,i)=>{ const ctx=this.ctx[i]||(this.ctx[i]={}); ctx.label=h.handed;
+      const F=features(h.world,h.image,aspect,ctx); const list=classify(F.v); return {i,h,F,list,raw:list[0].label,rawConf:confidence(list)}; });
+    // both hands open and held: clear
+    if(read.length>=2&&read[0].raw==='open'&&read[1].raw==='open'){
+      if(this.bothOpen==null) this.bothOpen=t;
+      const p=clamp((t-this.bothOpen)/1000);
+      if(p>=1&&t>=this.cool){ ev.push({type:'clear'}); this.cool=t+1200; this.bothOpen=t+1e9; }
+      this.hold=null; this.trail=[];
+      this.view={...V0,state:'clear',progress:p,label:'clear'}; return {events:ev,view:this.view};
+    } else this.bothOpen=null;
+    // the signing hand: the higher one (signers hold it up), with a little stickiness
+    let pick=read[0];
+    if(read.length>1){ const y=r=>r.h.image[0].y; const [a,b]=read; pick=y(a)<y(b)?a:b;
+      if(this.pick!=null){ const prev=read.find(r=>r.i===this.pick); if(prev&&Math.abs(y(a)-y(b))<.08) pick=prev; } }
+    this.pick=pick.i;
+    const img=pick.h.image, q=i=>({x:(1-img[i].x)*aspect,y:img[i].y});   // display (mirrored) coordinates
+    const palmPx=Math.hypot((img[9].x-img[0].x)*aspect,img[9].y-img[0].y)||.1;
+    const c=[0,5,9,13,17].reduce((s,i)=>({x:s.x+q(i).x/5,y:s.y+q(i).y/5}),{x:0,y:0});
+    if(this.prevC){ const sp=Math.hypot(c.x-this.prevC.x,c.y-this.prevC.y)/palmPx/(dt/1000); this.speed=this.speed*.5+sp*.5; } this.prevC=c;
+    // smooth the scores over a few frames so one bad frame can't flip the letter
+    const raw={}; for(const e of pick.list) raw[e.label]=e.d;
+    if(!this.ema) this.ema={...raw}; else for(const k in raw) this.ema[k]=this.ema[k]*.55+raw[k]*.45;
+    const list=Object.entries(this.ema).map(([label,d])=>({label,d})).sort((a,b)=>a.d-b.d);
+    const conf=confidence(list), top=list[0].label;
+    const label=conf>=CONF_MIN?top:null;
+    const still=this.speed<MOVE_MAX;
+    const L=pick.F.L, ext=k=>L[IDX[k][3]].y-L[IDX[k][0]].y>.45&&pick.F.v[FING.indexOf(k)]<.9, curled=k=>!ext(k);
+    this.trail.push({t,c,palm:palmPx,raw:pick.raw,pinky:q(20),index:q(8),
+      pinkyOnly:ext('P')&&curled('I')&&curled('M')&&curled('R'), indexOnly:ext('I')&&curled('M')&&curled('R')&&curled('P')});
+    while(this.trail.length&&t-this.trail[0].t>1700) this.trail.shift();
+    // --- gestures and moving letters
+    let g=null;
+    if(t>=this.cool){ g=this._swipe(t)||this._traceJ(t)||this._traceZ(t); }
+    if(g){
+      // the static letter typed by holding the start shape (an I before J, a pointing hand before Z) is swapped for the moving letter
+      const lc=this.lastCommit, swap=(g==='J'||g==='Z')&&lc&&!lc.gap&&t-lc.t<2500&&lc.ch!==g&&lc.ch===this.traceFrom;
+      if(swap) ev.push({type:'replace',from:lc.ch,ch:g});
+      else if(g==='J'||g==='Z') ev.push({type:'letter',ch:g});
+      else ev.push({type:g});
+      if(g==='J'||g==='Z'){ this.lastCommit={ch:g,t}; this.latched=g; this.latchPos=c; }
+      this.cool=t+650; this.trail=[]; this.hold=null;
+      this.view={label:g.length===1?g:null,conf:1,progress:1,state:g.length===1?'traced':g,top:list.slice(0,3),hand:pick.i};
+      return {events:ev,view:this.view};
+    }
+    // --- held letters
+    const isLetter=label&&label!=='open'&&label!=='one';
+    if(isLetter&&still&&t>=this.cool){
+      if(this.hold===label) this.miss=0;
+      else if(this.hold&&this.miss<130) this.miss+=dt;
+      else { this.hold=label; this.holdT0=t; this.miss=0; }
+    } else if(this.hold){ this.miss+=dt; if(this.miss>160) this.hold=null; }
+    // letting go of a committed letter: change shape, drop the hand, or slide it along
+    if(this.latched){
+      if(label!==this.latched) this.away+=dt; else this.away=0;
+      const moved=this.latchPos?Math.hypot(c.x-this.latchPos.x,c.y-this.latchPos.y)/palmPx:0;
+      if(this.away>=250||(moved>.8&&still)) { this.latched=null; this.away=0; if(this.hold) this.holdT0=t; }
+    }
+    let progress=this.hold?clamp((t-this.holdT0)/HOLD):0, state='idle';
+    if(this.hold&&this.hold===this.latched){ state='repeat'; progress=1; }
+    else if(this.hold&&progress>=1){ ev.push({type:'letter',ch:this.hold}); this.latched=this.hold; this.latchPos=c; this.lastCommit={ch:this.hold,t}; this.away=0; state='typed'; }
+    else if(this.hold) state='hold';
+    else if(!still) state='moving';
+    else if(top==='open') state='open';
+    else if(!label) state='unsure';
+    this.view={label:isLetter?label:(top==='open'&&conf>=CONF_MIN?'open':null),conf,progress,state,top:list.slice(0,3),hand:pick.i};
+    return {events:ev,view:this.view};
+  }
+  _noHand(dt){ if(this.lastCommit) this.lastCommit.gap=true; this.ema=null; this.hold=null; this.prevC=null; this.speed=0; this.trail=[]; this.bothOpen=null;
+    if(this.latched){ this.away+=dt; if(this.away>=250){ this.latched=null; this.away=0; } } }
+  _window(t,ms){ return this.trail.filter(p=>t-p.t<=ms); }
+  // open hand thrown in one direction
+  _swipe(t){
+    const w=this._window(t,520); if(w.length<4) return null;
+    const open=w.filter(p=>p.raw==='open').length/w.length; if(open<.75) return null;
+    const a=w[0], b=w[w.length-1], pl=(a.palm+b.palm)/2, dx=(b.c.x-a.c.x)/pl, dy=(b.c.y-a.c.y)/pl;
+    if(Math.abs(dx)>=1.6&&Math.abs(dx)>1.7*Math.abs(dy)) return dx>0?'space':'delete';
+    if(Math.abs(dy)>=1.4&&Math.abs(dy)>1.7*Math.abs(dx)) return dy>0?'stop':'speak';
+    return null;
+  }
+  // J: an I whose pinky drops and hooks
+  _traceJ(t){
+    const w=this._window(t,1300); const i0=w.findIndex(p=>p.raw==='I'||p.raw==='J'); if(i0<0) return null;
+    const s=w.slice(i0); if(s.length<5) return null; this.traceFrom='I';
+    if(s.filter(p=>p.pinkyOnly).length/s.length<.6) return null;
+    const pl=s[0].palm, y0=s[0].pinky.y, x0=s[0].pinky.x;
+    let maxY=-1e9, path=0; for(let k=0;k<s.length;k++){ maxY=Math.max(maxY,s[k].pinky.y); if(k) path+=Math.hypot(s[k].pinky.x-s[k-1].pinky.x,s[k].pinky.y-s[k-1].pinky.y); }
+    const drop=(maxY-y0)/pl, side=Math.abs(s[s.length-1].pinky.x-x0)/pl;
+    // the pinky has to swing around the hand (the wrist twist), not just travel with it
+    const r0={x:s[0].pinky.x-s[0].c.x,y:s[0].pinky.y-s[0].c.y}; let swing=0;
+    for(const p of s) swing=Math.max(swing,Math.hypot(p.pinky.x-p.c.x-r0.x,p.pinky.y-p.c.y-r0.y)/pl);
+    return drop>=.45&&side>=.25&&path/pl>=.9&&swing>=.35?'J':null;
+  }
+  // Z: a pointing index that goes across, back diagonally down, and across again
+  _traceZ(t){
+    const w=this._window(t,1700).filter(p=>p.indexOnly); if(w.length<8) return null;
+    const pl=w[0].palm, strokes=[]; let dir=0, anchor=w[0].index, ext=w[0].index; this.traceFrom=w[0].raw;
+    for(const p of w){ const dx=(p.index.x-ext.x)/pl;
+      if(dir===0){ if(Math.abs(p.index.x-anchor.x)/pl>.3){ dir=Math.sign(p.index.x-anchor.x); ext=p.index; } continue; }
+      if(Math.sign(p.index.x-ext.x)===dir) ext=p.index;
+      else if(Math.abs(dx)>.3){ strokes.push({dir,from:anchor,to:ext}); anchor=ext; dir=-dir; ext=p.index; } }
+    if(dir) strokes.push({dir,from:anchor,to:ext});
+    const S=strokes.filter(s=>Math.abs(s.to.x-s.from.x)/pl>=.45);
+    if(S.length<3) return null;
+    for(let k=0;k+2<S.length;k++){ const [a,b,c]=S.slice(k,k+3);
+      if(a.dir===-b.dir&&b.dir===-c.dir&&(c.to.y-a.from.y)/pl>=.45&&(b.to.y-b.from.y)/pl>=.3) return 'Z'; }
+    return null;
+  }
+}
+
+// ---------- letter diagrams (SVG, drawn from the same hand model) ----------
+function diagram(letter,{left=false}={}){
+  const spec=POSES[letter], P=poseLocal(spec), F=frameFrom(spec.o||OR.def);
+  const pr=p=>{ const c=toCam(p,F); return {x:left?c.x:-c.x, y:c.y, z:c.z}; };   // shown as you see yourself
+  const Q=P.map(pr);
+  const W={I:.2,M:.21,R:.2,P:.17,T:.23,palm:.16,arm:.5};
+  const els=[];
+  const chain=(pts,w,depthPts)=>els.push({pts,w,z:(depthPts||pts).reduce((s,p)=>s+p.z,0)/(depthPts||pts).length});
+  const armA=pr(V(-.05,.02,-.02)), armB=pr(V(-.05,-.75,-.02));
+  els.push({pts:[armA,armB],w:W.arm,z:1e3});
+  const palm=[pr(V(.2,-.02,0)),Q[1],pr(V(.3,.55,-.02)),Q[5],Q[9],Q[13],Q[17],pr(V(-.3,.05,0))];
+  els.push({pts:palm,w:W.palm,closed:true,z:palm.reduce((s,p)=>s+p.z,0)/palm.length+.05});
+  for(const fn of FING) chain(IDX[fn].map(i=>Q[i]),W[fn],IDX[fn].slice(1).map(i=>Q[i]));
+  chain([Q[1],Q[2],Q[3],Q[4]],W.T,[Q[2],Q[3],Q[4]]);
+  if(spec.xray) els[els.length-1].z=els[1].z-1e-3;   // the thumb sits under the folded fingers
+  els.sort((a,b)=>b.z-a.z);
+  // motion letters: the path to draw, in the same units
+  let mo=null; const m=left?-1:1;
+  if(spec.motion==='J'){ const t=Q[20]; mo=[[t.x+m*.32,t.y-.05],[t.x+m*.32,t.y+.75],[t.x+m*.3,t.y+1.05,t.x+m*-.05,t.y+1.05]]; }
+  if(spec.motion==='Z'){ const t=Q[8], y=t.y-.85, x=t.x-m*.35; mo=[[x,y],[x+m*.7,y],[x,y+.6],[x+m*.7,y+.6]]; }
+  // fit everything except the far end of the arm
+  const all=[...Q,armA,...(mo||[]).map(p=>({x:p[p.length-2],y:p[p.length-1]}))]; let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+  for(const p of all){ x0=Math.min(x0,p.x); y0=Math.min(y0,p.y); x1=Math.max(x1,p.x); y1=Math.max(y1,p.y); }
+  const pad=.2, sc=84/Math.max(x1-x0+2*pad,y1-y0+2*pad), cx=(x0+x1)/2, cy=(y0+y1)/2;
+  const X=p=>(50+(p.x-cx)*sc).toFixed(1), Y=p=>(50+(p.y-cy)*sc).toFixed(1);
+  const path=(pts,closed)=>'M'+pts.map(p=>X(p)+' '+Y(p)).join('L')+(closed?'Z':'');
+  const lw=2.2;
+  let s='';
+  for(const e of els){ const d=path(e.pts,e.closed), w=e.w*sc;
+    s+=`<path class="o" d="${d}" stroke-width="${(w+lw*2).toFixed(1)}" ${e.closed?'':'fill="none"'}/>`;
+    s+=`<path class="i" d="${d}" stroke-width="${w.toFixed(1)}" ${e.closed?'':'fill="none"'}/>`; }
+  // the thumb's hidden path for letters where it hides under the fingers
+  if(spec.xray){ s+=`<path class="x" d="${path([Q[2],Q[3],Q[4]])}" stroke-width="1.4" stroke-dasharray="2.5 2.5" stroke-linecap="round"/>`;
+    s+=`<circle cx="${X(Q[4])}" cy="${Y(Q[4])}" r="2.6" fill="currentColor"/>`; }
+  if(mo){ const P2=p=>({x:p[0],y:p[1]}); let d='M'+X(P2(mo[0]))+' '+Y(P2(mo[0]));
+    for(const q of mo.slice(1)) d+=q.length===4?` Q${X(P2(q))} ${Y(P2(q))} ${X({x:q[2]})} ${Y({y:q[3]})}`:` L${X(P2(q))} ${Y(P2(q))}`;
+    const e=mo[mo.length-1], ex=+X({x:e[e.length-2]}), ey=+Y({y:e[e.length-1]}), pv=e.length===4?{x:e[0],y:e[1]}:P2(mo[mo.length-2]);
+    const a=Math.atan2(ey-+Y(pv),ex-+X(pv)), h=5;
+    d+=` M${(ex-h*Math.cos(a-.5)).toFixed(1)} ${(ey-h*Math.sin(a-.5)).toFixed(1)} L${ex.toFixed(1)} ${ey.toFixed(1)} L${(ex-h*Math.cos(a+.5)).toFixed(1)} ${(ey-h*Math.sin(a+.5)).toFixed(1)}`;
+    s+=`<path class="x" d="${d}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`; }
+  return `<svg viewBox="0 0 100 100" aria-label="ASL letter ${letter}" stroke-linecap="round" stroke-linejoin="round">${s}</svg>`;
+}
+
+buildTemplates();
+G.SignCore={ POSES, LETTERS, STATIC, FEAT_NAMES, synth, features, classify, confidence, buildTemplates, Speller, diagram, HOLD };
+})(typeof window!=='undefined'?window:globalThis);
+</script>
+
+<script type="module">
+import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+const C=window.SignCore;
+const $=id=>document.getElementById(id);
+const video=$('cam'), cv=$('cv'), ctx=cv.getContext('2d'), statusEl=$('status'), textEl=$('text');
+let W=0,H=0,dpr=1,vS=1,vX=0,vY=0;   // screen + video mapping, set in resize()
+
+// ---------- storage (best effort) ----------
+const store={ get(k,d){ try{ const v=localStorage.getItem('signspeller.'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
+  set(k,v){ try{ localStorage.setItem('signspeller.'+k,JSON.stringify(v)); }catch(e){} } };
+let userT=store.get('templates',{}); C.buildTemplates(userT);
+let hand=store.get('hand','right');
+
+// ---------- words ----------
+const WORDS=`the be to of and a in that have i it for not on with he as you do at this but his by from they we say her she or an will my one all would there their what so up out if about who get which go me when make can like time no just him know take people into year your good some could them see other than then now look only come its over think also back after use two how our work first well way even new want because any these give day most us is was are were been has had did said made went got am yes hello hi hey thanks thank please sorry help okay ok fine great love name call where why here today tomorrow tonight morning night later soon wait stop again more less much many very really sure maybe need feel happy sad tired hungry thirsty water food eat drink coffee tea bathroom toilet home house car bus train school friend family mom dad mother father brother sister baby doctor hospital pain sick medicine emergency police fire money phone number email address open close left right down off around near far hot cold big small little long short old young nice bad better best help me nothing something everything someone everyone always never sometimes every each both same different next last early late fast slow quiet loud deaf hearing sign language learn understand speak talk tell ask answer question idea problem thing place world life hand hands finger letter word words read write spell spelling again slowly please repeat meet nice to see you good morning evening afternoon week month birthday party music movie game play watch show free busy ready done finish start begin end try keep let put bring buy pay sell send find lose win live move turn walk run sit stand sleep wake hold hear listen remember forget believe hope wish laugh cry smile kiss hug welcome goodbye bye see you soon`.split(/\s+/);
+const WL=[...new Set(WORDS)];
+function suggest(part){ if(!part) return []; const p=part.toLowerCase(); return WL.filter(w=>w.startsWith(p)&&w!==p).slice(0,3); }
+
+// ---------- text ----------
+let undoText=null, undoTimer=0;
+const atSentenceStart=v=>/^\s*$/.test(v)||/[.!?]\s*$/.test(v);
+function setText(v){ textEl.value=v; textEl.scrollTop=textEl.scrollHeight; autoSize(); renderSugs(); }
+function addLetter(ch){ const v=textEl.value; setText(v+(atSentenceStart(v)?ch.toUpperCase():ch.toLowerCase())); }
+function act(a){
+  const v=textEl.value;
+  if(a==='space'){ if(v&&!/\s$/.test(v)) setText(v+' '); }
+  else if(a==='stop'){ const t=v.replace(/\s+$/,''); if(t&&!/[.!?]$/.test(t)) setText(t+'. '); else if(t) setText(t+' '); }
+  else if(a==='delete'){ setText(v.slice(0,-1)); }
+  else if(a==='clear'){ if(!v) return; undoText=v; setText(''); $('clearBtn').textContent='undo'; clearTimeout(undoTimer); undoTimer=setTimeout(()=>{ undoText=null; $('clearBtn').textContent='clear'; },5000); }
+  else if(a==='undo'){ if(undoText!=null){ setText(undoText); undoText=null; $('clearBtn').textContent='clear'; } }
+  else if(a==='speak') speak();
+  flashNote(a==='stop'?'full stop':a==='delete'?'deleted':a==='space'?'space':a==='clear'?'cleared · tap undo':'' );
+}
+function speak(){
+  const parts=textEl.value.split(/(?<=[.!?])\s+/).map(s=>s.trim()).filter(Boolean); const say=parts[parts.length-1];
+  if(!say){ flashNote('nothing to say yet'); return; }
+  if(!('speechSynthesis' in window)){ flashNote('speech is not supported in this browser'); return; }
+  speechSynthesis.cancel(); const u=new SpeechSynthesisUtterance(say); u.rate=.95; speechSynthesis.speak(u); flashNote('speaking: '+say);
+}
+function autoSize(){ textEl.style.height='auto'; textEl.style.height=Math.min(textEl.scrollHeight+2,innerHeight*.3)+'px'; }
+function renderSugs(){
+  const m=textEl.value.match(/([A-Za-z']+)$/); const part=m?m[1]:'';
+  const list=suggest(part);
+  $('sugs').innerHTML=list.map((w,i)=>`<button data-w="${w}" title="${i===0?'tab':''}"><b>${w.slice(0,part.length)}</b>${w.slice(part.length)}</button>`).join('');
+  $('sugs').querySelectorAll('button').forEach(b=>b.onclick=()=>acceptWord(b.dataset.w));
+  renderSigns();
+}
+function acceptWord(w){ const v=textEl.value, m=v.match(/([A-Za-z']+)$/); if(!m) return;
+  const part=m[1], cap=/^[A-Z]/.test(part)?w[0].toUpperCase()+w.slice(1):w; setText(v.slice(0,v.length-part.length)+cap+' '); }
+textEl.addEventListener('input',()=>{ autoSize(); renderSugs(); });
+
+let noteT=0; function flashNote(s){ if(!s) return; $('note').textContent=s; noteT=performance.now(); }
+
+// ---------- guide ----------
+// public-domain drawings (wpclipart.com via Wikimedia Commons), bundled in signs/; the built-in model drawing is the fallback
+const REF={A:'2/27',B:'1/18',C:'e/e3',D:'0/06',E:'c/cd',F:'8/8f',G:'d/d9',H:'9/97',I:'1/10',J:'b/b1',K:'9/97',L:'d/d2',M:'c/c4',N:'e/e6',O:'e/e0',P:'0/08',Q:'3/34',R:'3/3d',S:'3/3f',T:'1/13',U:'7/7c',V:'c/ca',W:'8/83',X:'b/b7',Y:'1/1d',Z:'0/0a'};
+const pic=l=>`<img class="ref${hand==='right'?' flip':''}" alt="ASL letter ${l}" loading="lazy" src="signs/${l}.svg" onerror="this.classList.add('bad')">${C.diagram(l,{left:hand==='left'})}`;
+const grid=$('grid');
+let focusLetter='A', hot=null;
+// learn mode: the letter card stays on the letter you picked (or walks through a word) and nothing is typed
+const learn={on:false, word:'', idx:0};
+function renderGuide(){
+  grid.innerHTML=C.LETTERS.map(l=>`<button class="card${userT[l]?' mine':''}" data-l="${l}" title="${C.POSES[l].cap}">${pic(l)}<span>${l.toLowerCase()}</span></button>`).join('');
+  grid.querySelectorAll('.card').forEach(b=>b.onclick=()=>{ const l=b.dataset.l;
+    if(learn.on){ learn.word=''; learn.idx=0; focusLetter=l; renderFocus(); lstat('make this shape and hold it'); }
+    else { addLetter(l); setFocus(l); } b.blur(); });
+  renderFocus(); markHot(hot,true);
+}
+function setFocus(l){ if(l===focusLetter||learn.on) return; focusLetter=l; renderFocus(); }
+function renderFocus(){
+  const l=focusLetter, p=C.POSES[l], motion=!!p.motion;
+  let h=`<div>${pic(l)}</div><div><div class="big">${l.toLowerCase()}</div><div class="cap">${p.cap}${motion?'. motion letter':''}</div>
+    <div class="row">${motion?'':`<button id="teach" title="hold this letter, then press: it learns your own hand">teach</button>`}${userT[l]?`<button id="forget" class="ghost">forget mine</button>`:''}</div></div>`;
+  if(learn.on){ h+=`<div class="full"><div id="lword">${learn.word?learn.word.split('').map((c,i)=>`<span class="${i<learn.idx?'done':i===learn.idx?'now':''}">${c.toLowerCase()}</span>`).join(''):''}</div>
+    <div id="lstat">${learn.word?'':'tap a letter below, or practise a word'}</div>
+    <form class="wordin" id="wordForm"><input id="wordIn" placeholder="practise a word…" autocomplete="off" spellcheck="false" value="${learn.word.toLowerCase()}"><button type="submit">go</button></form></div>`; }
+  $('focus').innerHTML=h;
+  const tb=$('teach'); if(tb) tb.onclick=()=>startTeach(l);
+  const fb=$('forget'); if(fb) fb.onclick=()=>{ delete userT[l]; store.set('templates',userT); C.buildTemplates(userT); renderGuide(); flashNote('forgot your '+l.toLowerCase()); };
+  const wf=$('wordForm'); if(wf) wf.onsubmit=e=>{ e.preventDefault(); startWord($('wordIn').value); };
+}
+function markHot(l,force){ if(l===hot&&!force) return;
+  grid.querySelectorAll('.card.hot').forEach(c=>c.classList.remove('hot'));
+  hot=l; if(l&&l.length===1){ const c=grid.querySelector(`[data-l="${l}"]`); if(c) c.classList.add('hot'); setFocus(l); } }
+function lstat(msg,ok){ const e=$('lstat'); if(e){ e.textContent=msg; e.classList.toggle('ok',!!ok); } }
+function startWord(w){ w=(w||'').toUpperCase().replace(/[^A-Z]/g,''); learn.word=w; learn.idx=0; if(w) focusLetter=w[0]; renderFocus(); $('wordIn')?.blur();
+  lstat(w?'spell it: start with '+w[0].toLowerCase():'type a word with letters a to z'); }
+function setLearn(on){ learn.on=on; learn.word=''; learn.idx=0; document.body.classList.toggle('learning',on);
+  $('modeSeg').querySelectorAll('button').forEach(b=>b.classList.toggle('on',(b.dataset.m==='learn')===on)); renderFocus(); }
+// a letter you signed while learning
+function learnLetter(ch){
+  if(learn.word){ const want=learn.word[learn.idx];
+    if(ch!==want){ lstat('that was '+ch.toLowerCase()+', look at the picture and try '+want.toLowerCase()); return; }
+    learn.idx++;
+    if(learn.idx>=learn.word.length){ const w=learn.word; renderFocus(); lstat('✓ you spelled '+w.toLowerCase()+'! type another word',true);
+      if('speechSynthesis' in window){ speechSynthesis.cancel(); speechSynthesis.speak(new SpeechSynthesisUtterance(w.toLowerCase())); } learn.word=''; learn.idx=0; return; }
+    focusLetter=learn.word[learn.idx]; renderFocus(); lstat('✓ '+ch.toLowerCase()+' · now '+focusLetter.toLowerCase()+(focusLetter===ch?' again: relax your hand, then hold':''),true); return; }
+  if(ch===focusLetter) lstat('✓ that\'s '+ch.toLowerCase()+'. hold it again, or pick another letter',true);
+  else lstat('that was '+ch.toLowerCase()+', not '+focusLetter.toLowerCase()+'. compare with the picture');
+}
+// ---------- show signs (for whoever is watching your screen) ----------
+// The pictures face the viewer, the way they'd see a signer: not mirrored for a right hand.
+const viewPic=l=>`<img class="ref${hand==='left'?' flip':''}" alt="ASL ${l}" src="signs/${l}.svg" onerror="this.classList.add('bad')">${C.diagram(l,{left:hand!=='left'})}`;
+var signsOn=false;   // var: renderSugs may run before this line
+function setSigns(on){ signsOn=on; document.body.classList.toggle('signs-on',on); $('signsBtn').classList.toggle('on',on); store.set('signs',on); renderSigns(); }
+function renderSigns(){
+  if(!signsOn) return;
+  // the sentence you're on (or the last one), its last few words
+  const parts=textEl.value.split(/(?<=[.!?])\s+/).filter(x=>x.trim()); const cur=(parts[parts.length-1]||'');
+  const words=cur.toUpperCase().split(/\s+/).map(w=>w.replace(/[^A-Z]/g,'')).filter(Boolean).slice(-3);
+  const n=words.reduce((a,w)=>a+w.length,0);
+  $('signRow').innerHTML=words.map((w,wi)=>`<div class="sw">${w.split('').map((c,ci)=>`<div class="sg${wi===words.length-1&&ci===w.length-1?' last':''}">${viewPic(c)}<span>${c.toLowerCase()}</span></div>`).join('')}</div>`).join('');
+  $('signBar').style.display=n?'flex':'none';
+}
+$('signsBtn').onclick=()=>{ setSigns(!signsOn); $('signsBtn').blur(); };
+// play: one big letter at a time
+let play=null, slow=false;
+function playSentence(){
+  const parts=textEl.value.split(/(?<=[.!?])\s+/).filter(x=>x.trim()); const sent=(parts[parts.length-1]||'').replace(/[^A-Za-z\s]/g,'').trim().replace(/\s+/g,' ');
+  if(!sent){ flashNote('type something first'); return; }
+  stopPlay(); const seq=sent.toUpperCase().split(''); let i=0;
+  $('player').classList.add('on');
+  $('pword').innerHTML=seq.map(c=>c===' '?'<span>&nbsp;</span>':`<span>${c.toLowerCase()}</span>`).join('');
+  const spans=[...$('pword').children];
+  const step=()=>{ spans.forEach((sp,k)=>sp.className=k<i?'done':k===i?'now':'');
+    if(i>=seq.length){ $('pbig').innerHTML=''; play=null; return; }
+    const c=seq[i]; $('pbig').innerHTML=c===' '?'':viewPic(c);
+    const ms=(c===' '?450:850)*(slow?1.7:1); i++; play=setTimeout(step,ms); };
+  step();
+}
+function stopPlay(){ clearTimeout(play); play=null; }
+$('playBtn').onclick=()=>{ playSentence(); $('playBtn').blur(); };
+$('pAgain').onclick=playSentence;
+$('pSlow').onclick=()=>{ slow=!slow; $('pSlow').textContent=slow?'faster':'slower'; playSentence(); };
+$('pClose').onclick=()=>{ stopPlay(); $('player').classList.remove('on'); };
+
+$('modeSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{ setLearn(b.dataset.m==='learn'); b.blur(); });
+$('handSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{ hand=b.dataset.h; store.set('hand',hand);
+  $('handSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b)); renderGuide(); });
+$('handSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.h===hand));
+const guideOpen=()=>document.body.classList.contains('guide-open');
+function toggleGuide(on=!guideOpen()){ document.body.classList.toggle('guide-open',on); $('gbtn').classList.toggle('on',on); layout(); }
+$('gbtn').onclick=()=>toggleGuide(); $('gclose').onclick=()=>toggleGuide(false);
+if(innerWidth<900) toggleGuide(false);
+renderGuide();
+
+// teach: record your own version of a letter for a second, saved as an extra template
+let teaching=null;
+function startTeach(l){ teaching={l,t0:performance.now(),samples:[]}; flashNote('hold your '+l.toLowerCase()+' still…'); }
+function teachFrame(fv,now){
+  if(!teaching) return; if(fv) teaching.samples.push(fv);
+  if(now-teaching.t0>1400){ const s=teaching.samples, l=teaching.l; teaching=null;
+    if(s.length<8){ flashNote('no hand seen, try again'); return; }
+    const mean=s[0].map((_,i)=>s.reduce((a,v)=>a+v[i],0)/s.length);
+    (userT[l]=userT[l]||[]).push(mean); if(userT[l].length>3) userT[l].shift();
+    store.set('templates',userT); C.buildTemplates(userT); renderGuide(); flashNote('learned your '+l.toLowerCase()); } }
+
+// ---------- buttons + keys ----------
+document.querySelectorAll('[data-act]').forEach(b=>b.onclick=()=>{ const a=b.dataset.act==='clear'&&undoText!=null?'undo':b.dataset.act; act(a); b.blur(); });
+$('speak').onclick=()=>{ speak(); $('speak').blur(); };
+addEventListener('keydown',e=>{
+  if(e.target&&e.target.id==='wordIn') return;
+  if(e.target===textEl){ if(e.key==='Escape') textEl.blur(); else if(e.key==='Tab'){ const b=$('sugs').querySelector('button'); if(b){ e.preventDefault(); acceptWord(b.dataset.w); } } else if(e.key==='Enter'){ e.preventDefault(); speak(); } return; }
+  if(e.metaKey||e.ctrlKey||e.altKey) return;
+  const k=e.key.toLowerCase();
+  if($('player').classList.contains('on')){ if(e.key==='Escape'||k==='p'){ $('pClose').click(); } return; }
+  if(k==='h'){ document.body.classList.toggle('clean'); layout(); }
+  else if(k==='s') setSigns(!signsOn);
+  else if(k==='p') playSentence();
+  else if(k==='c') nextCam();
+  else if(k==='k') toggleMode();
+  else if(k==='g') toggleGuide();
+  else if(e.key===' '){ e.preventDefault(); act('space'); }
+  else if(e.key==='.'){ act('stop'); }
+  else if(e.key==='Backspace'){ e.preventDefault(); act('delete'); }
+  else if(e.key==='Enter'){ e.preventDefault(); speak(); }
+  else if(e.key==='Tab'){ const b=$('sugs').querySelector('button'); if(b){ e.preventDefault(); acceptWord(b.dataset.w); } }
+  else if(e.key==='`'){ copyLandmarks(); }
+  else if(/^[a-z]$/.test(k)&&!document.body.classList.contains('clean')){ textEl.focus(); }   // any other letter: jump into the text box
+});
+
+// ---------- layout ----------
+function layout(){
+  const wide=innerWidth>=900&&guideOpen()&&!document.body.classList.contains('clean');
+  document.documentElement.style.setProperty('--rp',wide?'332px':'0px');
+  document.documentElement.style.setProperty('--dockH',$('dock').offsetHeight+'px');
+  resize();
+}
+new ResizeObserver(()=>document.documentElement.style.setProperty('--dockH',$('dock').offsetHeight+'px')).observe($('dock'));
+
+// ---------- camera + tracking ----------
+let landmarker=null, camOn=false;
+const ready=(async()=>{
+  const files=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const o=d=>({ baseOptions:{ modelAssetPath:"https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task", delegate:d },
+    runningMode:"VIDEO", numHands:2, minHandDetectionConfidence:.5, minHandPresenceConfidence:.5, minTrackingConfidence:.5 });
+  try{ landmarker=await HandLandmarker.createFromOptions(files,o("GPU")); }catch(e){ landmarker=await HandLandmarker.createFromOptions(files,o("CPU")); }
+  statusEl.textContent='ready';
+})().catch(()=>{ statusEl.textContent='hand tracker failed to load. keyboard and the letter guide still work'; });
+
+function begin(){ $('start').remove(); if(camOn) setSigns(store.get('signs',false)); layout(); autoSize(); requestAnimationFrame(loop); }
+function noCamera(msg){ camOn=false; setSigns(store.get('signs',true)); document.body.classList.add('nocam'); $('banner').innerHTML=msg; $('state').textContent='no camera · type, or tap the letters'; }
+// ---------- cameras: pick any connected camera (laptop, iPhone via Continuity Camera, USB) ----------
+let stream=null;
+async function openCam(id){
+  const v={ width:{ideal:1280}, height:{ideal:720} }; if(id) v.deviceId={exact:id}; else v.facingMode='user';
+  const st=await navigator.mediaDevices.getUserMedia({ video:v, audio:false });
+  if(stream&&stream!==st) stream.getTracks().forEach(t=>t.stop());
+  stream=st; video.srcObject=st; await video.play();
+  lastVT=-1; speller.reset(); shown=[]; resize();
+  const cur=st.getVideoTracks()[0]?.getSettings().deviceId; if(cur) store.set('cam',cur);
+  await listCams(cur);
+}
+async function listCams(cur){
+  const sel=$('camSel'); let devs=[];
+  try{ devs=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput'); }catch(e){}
+  sel.replaceChildren(...devs.map((d,i)=>new Option(d.label||('camera '+(i+1)),d.deviceId)));
+  if(cur) sel.value=cur;
+  sel.style.display=camOn&&devs.length>1?'block':'none';
+}
+$('camSel').onchange=async e=>{ const id=e.target.value; flashNote('switching camera…');
+  try{ await openCam(id); flashNote('camera: '+(e.target.selectedOptions[0]?.text||'')); }
+  catch(err){ flashNote('that camera could not start'); listCams(stream?.getVideoTracks()[0]?.getSettings().deviceId); }
+  e.target.blur(); };
+navigator.mediaDevices?.addEventListener?.('devicechange',()=>{ if(camOn) listCams(stream?.getVideoTracks()[0]?.getSettings().deviceId); });
+function nextCam(){ const sel=$('camSel'); if(sel.options.length<2) return; sel.selectedIndex=(sel.selectedIndex+1)%sel.options.length; sel.onchange({target:sel}); }
+
+// start the camera; returns true when hand tracking is running
+async function startCamera(){
+  try{ const saved=store.get('cam',null);
+    try{ await openCam(saved); } catch(e){ if(!saved) throw e; await openCam(null); }   // the saved camera may be unplugged
+    await ready; camOn=!!landmarker;
+    if(!landmarker){ noCamera('The hand tracker could not load (are you offline?).<br>You can still type, or tap the letters in the guide.'); return false; }
+    document.body.classList.remove('nocam'); listCams(stream?.getVideoTracks()[0]?.getSettings().deviceId); return true; }
+  catch(e){ noCamera('Camera blocked. Allow camera access in your browser\'s address bar and reload.<br>You can still type, or tap the letters in the guide.'); return false; }
+}
+const KB_MSG='Keyboard mode: click the text box to type, or tap the letters in the guide to learn them.<br>Turn on signs to show what you type as hand signs.';
+function keyboardMode(){
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; } video.srcObject=null;
+  speller.reset(); shown=[]; view={label:null,conf:0,progress:0,state:'idle'}; updateHud([]);
+  noCamera(KB_MSG); listCams(); modeBtn();
+}
+// the dock button: switch between camera and keyboard at any time
+function modeBtn(){ const b=$('modeBtn'); b.textContent=camOn?'keyboard':'camera'; b.title=camOn?'turn the camera off and type instead (k)':'turn the camera on and spell with your hand (k)'; }
+async function toggleMode(){ const b=$('modeBtn'); b.blur();
+  if(camOn){ keyboardMode(); flashNote('keyboard mode'); return; }
+  b.textContent='starting…'; const ok=await startCamera(); modeBtn(); flashNote(ok?'camera on':'camera could not start'); updateHud([]); }
+$('go').onclick=async()=>{ statusEl.textContent='starting camera…'; await startCamera(); begin(); modeBtn(); };
+$('kb').onclick=()=>{ noCamera(KB_MSG); begin(); modeBtn(); };
+$('modeBtn').onclick=toggleMode;
+
+// ---------- screen mapping ----------
+function resize(){
+  dpr=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+  const vw=video.videoWidth||1280, vh=video.videoHeight||720; vS=Math.max(W/vw,H/vh); vX=(W-vw*vS)/2; vY=(H-vh*vS)/2;
+}
+addEventListener('resize',layout);
+const toScreen=p=>({ x:vX+(1-p.x)*(video.videoWidth||1280)*vS, y:vY+p.y*(video.videoHeight||720)*vS });
+
+// ---------- smoothing for drawing only (classification uses the raw landmarks) ----------
+class LowPass { constructor(){this.y=null;} f(x,a){ this.y=this.y===null?x:a*x+(1-a)*this.y; return this.y; } }
+class OneEuro { constructor(mc=1.2,b=.03){ this.mc=mc; this.b=b; this.x=new LowPass(); this.dx=new LowPass(); this.last=null; }
+  a(c,dt){ const tau=1/(2*Math.PI*c); return 1/(1+tau/dt); }
+  filter(v,t){ if(this.last===null||t-this.last>400){ this.last=t; this.prev=v; this.x.y=null; this.dx.y=null; return this.x.f(v,1); }
+    const dt=Math.max(1e-3,(t-this.last)/1000); this.last=t; const d=(v-this.prev)/dt; this.prev=v;
+    const ed=this.dx.f(d,this.a(1,dt)); return this.x.f(v,this.a(this.mc+this.b*Math.abs(ed),dt)); } }
+const filt=[0,1].map(()=>Array.from({length:21},()=>({x:new OneEuro(),y:new OneEuro()})));
+
+// ---------- the pipeline: camera results and test input both enter here ----------
+const speller=new C.Speller();
+let view={label:null,conf:0,progress:0,state:'idle'}, shown=[], lastHands=[];
+function process(hands,t,aspect){
+  lastHands=hands;
+  const r=speller.step(hands,t,aspect);
+  for(const e of r.events){
+    if(learn.on&&(e.type==='letter'||e.type==='replace')) learnLetter(e.ch);
+    else if(e.type==='letter') addLetter(e.ch);
+    else if(e.type==='replace'){ const v=textEl.value; if(v.slice(-1).toLowerCase()===e.from.toLowerCase()) setText(v.slice(0,-1)); addLetter(e.ch); }
+    else act(e.type);
+  }
+  view=r.view;
+  if(teaching&&hands.length){ const h=hands[r.view.hand>=0?r.view.hand:0]; teachFrame(C.features(h.world,h.image,aspect,{}).v,performance.now()); } else if(teaching) teachFrame(null,performance.now());
+  updateHud(r.events);
+  return r;
+}
+window.__feed=(hands,t,aspect=16/9)=>process(hands,t,aspect);
+window.__text=()=>textEl.value;
+window.__speller=speller;
+
+function updateHud(events){
+  const L=view.label, st=view.state;
+  const letter=L&&L.length===1?L:null;
+  $('ringTxt').textContent=letter?letter.toLowerCase():st==='clear'?'×':L==='open'?'✋':'·';
+  const p=st==='repeat'?1:view.progress;
+  $('ringArc').setAttribute('stroke-dasharray',`${(p*125.7).toFixed(1)} 126`);
+  $('ringArc').setAttribute('stroke',st==='repeat'?'rgba(255,255,255,.35)':'#fff');
+  $('conf').style.width=Math.round((view.conf||0)*100)+'%';
+  $('pct').textContent=view.conf?Math.round(view.conf*100)+'%':'';
+  const msg={ idle: camOn?'show your hand':'no camera · type, or tap the letters', hold:'hold still…', typed:(learn.on?'signed ':'typed ')+(letter||'').toLowerCase(), repeat:'relax or slide to repeat '+(letter||'').toLowerCase(),
+    moving:'moving', open:'open hand · swipe to edit', unsure:'not sure, try the shape in the guide', traced:'drew '+(letter||'').toLowerCase(), clear:'keep both hands open to clear',
+    space:'space', delete:'deleted', stop:'full stop', speak:'speaking' }[st]||st;
+  $('state').textContent=msg;
+  if(letter) markHot(letter);
+  if(learn.on&&letter&&!events.length&&st==='hold') lstat(letter===(learn.word?learn.word[learn.idx]:focusLetter)?'hold it…':'you\'re showing '+letter.toLowerCase());
+  for(const e of events) if(e.type==='letter'||e.type==='replace') pulse=1;
+}
+let pulse=0;
+
+function copyLandmarks(){
+  const data=JSON.stringify({ t:Date.now(), hands:lastHands, view },null,0);
+  navigator.clipboard?.writeText(data).then(()=>flashNote('landmarks copied'),()=>flashNote('could not copy'));
+}
+
+// ---------- draw ----------
+let lastVT=-1;
+function loop(now){
+  requestAnimationFrame(loop);
+  if(now-noteT>2200&&noteT){ $('note').textContent='fingerspelling · asl alphabet'; noteT=0; }
+  if(camOn&&landmarker&&video.readyState>=2&&video.currentTime!==lastVT){
+    lastVT=video.currentTime;
+    if(!vS||W!==innerWidth) resize();
+    const res=landmarker.detectForVideo(video,now);
+    const hands=(res.landmarks||[]).map((lm,i)=>({ image:lm, world:(res.worldLandmarks||[])[i]||lm, handed:res.handedness?.[i]?.[0]?.categoryName||'' }));
+    process(hands,now,(video.videoWidth||16)/(video.videoHeight||9));
+    shown=hands.map((h,k)=>h.image.map((p,i)=>{ const s=toScreen(p); return {x:filt[k%2][i].x.filter(s.x,now), y:filt[k%2][i].y.filter(s.y,now)}; }));
+  }
+  draw(now);
+}
+function draw(now){
+  ctx.clearRect(0,0,W,H);
+  if(camOn&&video.readyState>=2){
+    ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
+    ctx.filter='brightness(.72) grayscale(.15)';
+    ctx.drawImage(video,W-vX-video.videoWidth*vS,vY,video.videoWidth*vS,video.videoHeight*vS); ctx.restore(); ctx.filter='none';
+  }
+  pulse*=.9;
+  shown.forEach((P,k)=>{
+    if(k!==view.hand) return;   // no hand skeleton: just the letter bubble above the signing hand
+    // the letter + hold ring, floating above the hand
+    let x0=1e9,y0=1e9,x1=-1e9; for(const p of P){ x0=Math.min(x0,p.x); x1=Math.max(x1,p.x); y0=Math.min(y0,p.y); }
+    const cx=(x0+x1)/2, cy=Math.max(48,y0-44), r=24+pulse*6;
+    const L=view.label&&view.label.length===1?view.label.toLowerCase():null;
+    if(!L&&view.state!=='clear') return;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,7); ctx.fillStyle='rgba(0,0,0,.45)'; ctx.fill(); ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.stroke();
+    const p=view.state==='repeat'?1:view.progress;
+    ctx.beginPath(); ctx.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.strokeStyle=view.state==='repeat'?'rgba(255,255,255,.35)':'#fff'; ctx.stroke();
+    ctx.fillStyle='#fff'; ctx.font='22px ui-monospace, Menlo, monospace'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(L||'×',cx,cy+1);
+  });
+}
+resize();
+</script>
+</body>
+</html>
