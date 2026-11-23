@@ -29,7 +29,7 @@
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html, body { margin:0; height:100%; background:#000; color:var(--w); overflow:hidden; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:13px; letter-spacing:.01em; }
   video { display:none; }
-  #cv { position:fixed; inset:0; width:100vw; height:100vh; }
+  #cv { position:fixed; left:0; top:0; }   /* sized in JS to exactly the visible area, so the picture is never stretched */
 
   .top { position:fixed; top:max(16px, env(safe-area-inset-top)); left:var(--pad); right:calc(var(--pad) + var(--rp)); display:flex; justify-content:space-between; align-items:center; gap:12px; pointer-events:none; text-shadow:0 1px 8px rgba(0,0,0,.6); z-index:3; }
   .brand span, #note { color:var(--mid); }
@@ -990,7 +990,7 @@ $('modeBtn').onclick=toggleMode;
 // ---------- screen mapping ----------
 function resize(){
   dpr=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
-  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
+  cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); cv.style.width=W+'px'; cv.style.height=H+'px'; ctx.setTransform(dpr,0,0,dpr,0,0);
   // phones held upright: show the camera as a 16:9 strip across the middle, black above and below, never stretched
   const bh=Math.round(W*9/16); box=H>W?{x:0,y:Math.round((H-bh)/2),w:W,h:bh}:{x:0,y:0,w:W,h:H};
   const vw=video.videoWidth||1280, vh=video.videoHeight||720; lastVW=vw; lastVH=vh;
