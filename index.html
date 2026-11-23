@@ -741,7 +741,7 @@ import { FilesetResolver, HandLandmarker } from "https://cdn.jsdelivr.net/npm/@m
 const C=window.SignCore;
 const $=id=>document.getElementById(id);
 const video=$('cam'), cv=$('cv'), ctx=cv.getContext('2d'), statusEl=$('status'), textEl=$('text');
-let W=0,H=0,dpr=1,vS=1,vX=0,vY=0;   // screen + video mapping, set in resize()
+let W=0,H=0,dpr=1,vS=1,vX=0,vY=0,box={x:0,y:0,w:0,h:0},lastVW=0,lastVH=0;   // screen + video mapping, set in resize()
 
 // ---------- storage (best effort) ----------
 const store={ get(k,d){ try{ const v=localStorage.getItem('signspeller.'+k); return v==null?d:JSON.parse(v); }catch(e){ return d; } },
@@ -941,7 +941,7 @@ function noCamera(msg){ camOn=false; setSigns(store.get('signs',true)); document
 // ---------- cameras: pick any connected camera (laptop, iPhone via Continuity Camera, USB) ----------
 let stream=null;
 async function openCam(id){
-  const v={ width:{ideal:1280}, height:{ideal:720} }; if(id) v.deviceId={exact:id}; else v.facingMode='user';
+  const v={ width:{ideal:1280}, height:{ideal:720}, aspectRatio:{ideal:16/9} }; if(id) v.deviceId={exact:id}; else v.facingMode='user';
   const st=await navigator.mediaDevices.getUserMedia({ video:v, audio:false });
   if(stream&&stream!==st) stream.getTracks().forEach(t=>t.stop());
   stream=st; video.srcObject=st; await video.play();
@@ -991,7 +991,10 @@ $('modeBtn').onclick=toggleMode;
 function resize(){
   dpr=Math.min(devicePixelRatio||1,2); W=innerWidth; H=innerHeight;
   cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr); ctx.setTransform(dpr,0,0,dpr,0,0);
-  const vw=video.videoWidth||1280, vh=video.videoHeight||720; vS=Math.max(W/vw,H/vh); vX=(W-vw*vS)/2; vY=(H-vh*vS)/2;
+  // phones held upright: show the camera as a 16:9 strip across the middle, black above and below, never stretched
+  const bh=Math.round(W*9/16); box=H>W?{x:0,y:Math.round((H-bh)/2),w:W,h:bh}:{x:0,y:0,w:W,h:H};
+  const vw=video.videoWidth||1280, vh=video.videoHeight||720; lastVW=vw; lastVH=vh;
+  vS=Math.max(box.w/vw,box.h/vh); vX=box.x+(box.w-vw*vS)/2; vY=box.y+(box.h-vh*vS)/2;
 }
 addEventListener('resize',layout);
 const toScreen=p=>({ x:vX+(1-p.x)*(video.videoWidth||1280)*vS, y:vY+p.y*(video.videoHeight||720)*vS });
@@ -1057,7 +1060,7 @@ function loop(now){
   if(now-noteT>2200&&noteT){ $('note').textContent='fingerspelling · asl alphabet'; noteT=0; }
   if(camOn&&landmarker&&video.readyState>=2&&video.currentTime!==lastVT){
     lastVT=video.currentTime;
-    if(!vS||W!==innerWidth) resize();
+    if(!vS||W!==innerWidth||H!==innerHeight||video.videoWidth!==lastVW||video.videoHeight!==lastVH) resize();   // also when a phone rotates the camera feed
     const res=landmarker.detectForVideo(video,now);
     const hands=(res.landmarks||[]).map((lm,i)=>({ image:lm, world:(res.worldLandmarks||[])[i]||lm, handed:res.handedness?.[i]?.[0]?.categoryName||'' }));
     process(hands,now,(video.videoWidth||16)/(video.videoHeight||9));
@@ -1068,7 +1071,7 @@ function loop(now){
 function draw(now){
   ctx.clearRect(0,0,W,H);
   if(camOn&&video.readyState>=2){
-    ctx.save(); ctx.translate(W,0); ctx.scale(-1,1);
+    ctx.save(); ctx.beginPath(); ctx.rect(box.x,box.y,box.w,box.h); ctx.clip(); ctx.translate(W,0); ctx.scale(-1,1);
     ctx.filter='brightness(.72) grayscale(.15)';
     ctx.drawImage(video,W-vX-video.videoWidth*vS,vY,video.videoWidth*vS,video.videoHeight*vS); ctx.restore(); ctx.filter='none';
   }
